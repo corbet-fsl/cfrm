@@ -1,0 +1,24 @@
+{
+  "name": "cfrm-directional-receipts-experiment",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 receipts.test.js attestations.test.js",
+    "test:receipts": "node --test --test-concurrency=1 receipts.test.js",
+    "test:attestations": "node --test --test-concurrency=1 attestations.test.js",
+    "test:composition": "node --test --test-concurrency=1 composition.test.js",
+    "test:bridge": "node --test --test-concurrency=1 bridge.test.js",
+    "test:controller": "node --test --test-concurrency=1 controller-store.test.js",
+    "test:all": "node --test --test-concurrency=1 receipts.test.js attestations.test.js composition.test.js bridge.test.js"
+  },
+  "license": "SEE LICENSE IN ../../LICENSE.md",
+  "dependencies": {
+    "@cloudflare/blindrsa-ts": "0.4.6",
+    "@semaphore-protocol/group": "4.14.3",
+    "@semaphore-protocol/identity": "4.14.3",
+    "@semaphore-protocol/proof": "4.14.3",
+    "ffjavascript": "0.3.1"
+  }
+}

@@ -2,6 +2,10 @@
 
 All values here are explicit experiment parameters. They are not settled community rules.
 
+This simulator is omniscient. Its directional sent/received and delivery counts are not available to the current private protocol. The [private-accounting study](../studies/private-accounting-contract.md) maps the proven observations and proposes a separately named candidate for review; it does not claim these rules are already implemented privately.
+
+The [directional blind-receipt study](../studies/directional-blind-receipts.md) separately investigates counters of mutually authorized acknowledgements, including receipt pooling and the original guarantees still unproven. Neither candidate is selected or implemented.
+
 | Parameter | Default | Meaning |
 |---|---:|---|
 | `initialTokens` | 3 | New credential's first-contact allowance |

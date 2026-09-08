@@ -18,7 +18,7 @@ identity = new Identity(seed)
 
 The community follows the existing canonical ASCII scope grammar; there is no environment, deployment host, current time, passkey ID or chat key in the derivation. Restoring or rewrapping the same encrypted wallet must reproduce the same commitment. The additional cfrm purpose/community separation is intentional even though cvld already separates storage-key purposes. Cross-runtime vectors remain to be executed before claiming portable compatibility. Losing the wallet requires restoring the same encrypted wallet; silently enrolling a replacement commitment is forbidden.
 
-The durable enrollment store contains only `(communityId, memberId, commitment)` plus indexes. It contains no profile, network endpoint, current-presence flag, passkey, phone number, payment detail or behavioral ban. This mapping enables a qualified eligibility snapshot; snapshot publication and completeness remain separate.
+The immutable binding contains only `(communityId, memberId, commitment)` plus indexes. A separate minimal qualification row retains the policy digest and latest verified admission expiry for that member; fresh dual-proof enrollment also refreshes this row. Expired qualification can be removed while the immutable binding persists. The store contains no profile, network endpoint, current-presence flag, passkey, phone number, payment detail or behavioral ban. The [checkpoint publisher](SNAPSHOTS.md) now uses this registered qualification state without exposing its member-ID mapping.
 
 ## Two required proofs of possession
 
@@ -48,4 +48,4 @@ Replay and expiry must be checked at atomic insertion, with independent SQLite c
 
 The prepared service uses opaque consumed-challenge hashes and a per-community clock floor in addition to the immutable bindings. These are replay/validity controls, not member activity histories. The floor prevents a restarted process with a rolled-back clock from reviving pruned challenges. Expired hashes can be removed while the floor persists. A process-local challenge-authentication key is replaced on restart, invalidating unfinished challenges.
 
-Signed eligibility publication is a separate [checkpoint contract](SNAPSHOTS.md). Enrollment by itself does not assert that a credential remains eligible forever.
+Signed eligibility publication follows the separately tested [checkpoint contract](SNAPSHOTS.md). Enrollment by itself does not assert that a credential remains eligible forever.

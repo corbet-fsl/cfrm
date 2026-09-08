@@ -89,9 +89,11 @@ export function openLedger(path) {
     return info.expiresAt <= db.prepare('SELECT through FROM retirement WHERE singleton=1').get().through;
   }
   return {
-    allocate(info, allocation, quota) {
+    allocate(info, allocation, quota, clock) {
       text(allocation); integer(quota);
       return transaction(() => {
+        // The caller's time sample may precede a wait for this write lock.
+        if (!active(info, clock())) throw new Error('Inactive epoch');
         register(info);
         const prior = db.prepare('SELECT quota FROM allocations WHERE context=? AND id=?').get(info.id, allocation);
         if (prior) {
@@ -108,10 +110,12 @@ export function openLedger(path) {
     hasAllowance(info, allocation) {
       return Boolean(db.prepare('SELECT 1 FROM allocations WHERE context=? AND id=? AND issued<quota').get(info.id, allocation));
     },
-    issue(info, allocation, requestHash, signature) {
+    issue(info, allocation, requestHash, signature, clock) {
       return transaction(() => {
         const prior = this.prior(info, allocation, requestHash);
         if (prior) return prior;
+        // Preserve committed retries, but never create an expired reservation.
+        if (!active(info, clock()) || retired(info)) throw new Error('Inactive epoch');
         const updated = db.prepare('UPDATE allocations SET issued=issued+1 WHERE context=? AND id=? AND issued<quota').run(info.id, allocation);
         if (Number(updated.changes) !== 1) throw new Error('No allowance');
         db.prepare('INSERT INTO issuances(context,allocation,request_hash,signature) VALUES (?,?,?,?)')
@@ -156,7 +160,7 @@ export function createIssuer(epoch, ledger, clock) {
     // Trusted numerical rules call this method; it is not a client admission API.
     allocate(allocation, quota) {
       if (!active(context, clock())) throw new Error('Inactive epoch');
-      return ledger.allocate(info, allocation, quota);
+      return ledger.allocate(info, allocation, quota, clock);
     },
     async issue(allocation, request) {
       try {
@@ -172,7 +176,7 @@ export function createIssuer(epoch, ledger, clock) {
         // Crypto completes before charging. The durable transaction is idempotent.
         const signature = encode(await suite.blindSign(privateKey, blinded));
         if (!active(context, clock())) throw new Error();
-        return { blindSignature: ledger.issue(info, allocation, requestHash, signature) };
+        return { blindSignature: ledger.issue(info, allocation, requestHash, signature, clock) };
       } catch { throw new Error('Permit issuance rejected'); }
     },
   };

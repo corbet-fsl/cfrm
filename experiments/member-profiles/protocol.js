@@ -117,6 +117,10 @@ async function admitted(grant, config) {
   if (config.clock() < grant.issuedAt || config.clock() >= grant.expiresAt) fail();
 }
 
+// Share the established route validation with transport adapters without
+// exposing a second, weaker onion parser.
+export function validateProfileEndpoint(value) { return endpoint(value); }
+
 export function profileChallengeBytes(value) {
   challenge(value);
   return jsonBytes(['cfrm.profile.v1', 'challenge', value.communityId, value.ownerMemberId,

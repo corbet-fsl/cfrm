@@ -1,6 +1,6 @@
 # Authenticated complete eligibility checkpoints
 
-Thirteen tests failed against the explicit checkpoint stubs at source `09c12d3a9c8f460e8eaf33763c897dc1a6e92c64` in internal CI. The corresponding implementation now awaits its first execution. This is not a transparency system: a signature can authenticate a checkpoint, but cannot prove that the checkpoint issuer told the truth or showed everyone the same checkpoint.
+Thirteen tests failed against the explicit checkpoint stubs at source `09c12d3a9c8f460e8eaf33763c897dc1a6e92c64` and passed against the implementation at `11acb6a30c23b28abaafe4c10e228efdaed90aae` in internal CI. Tests use the actual pinned cvld admission verifier and real Ed25519/Semaphore signatures and proofs. This is not a transparency system: a signature can authenticate a checkpoint, but cannot prove that the checkpoint issuer told the truth or showed everyone the same checkpoint.
 
 ## Inputs and lifecycle
 
@@ -14,6 +14,8 @@ The published values are all enrolled commitments whose recorded cvld qualificat
 An account that has not enrolled a Semaphore identity or refreshed its expired registered qualification cannot participate in anonymous acknowledgements in that epoch. The publisher's public request API must not accept a caller-selected member list, predicate or subset. The snapshot transaction fixes its cut using a trusted clock and reads the full enrollment/qualification state consistently with concurrent enrollment and renewal. A later request cannot backdate qualification into an already frozen checkpoint. Minimal expiry state reveals some eligibility freshness to the operator; it is distinct from a public profile or live-presence archive.
 
 Epochs use an explicit fixed duration. At a successful publication cut `now`, `epoch=floor(now/epochSeconds)`, `notBefore=now` and `expiresAt=(epoch+1)*epochSeconds`. Inclusion requires a previously verified admission with `validUntil >= expiresAt`; one second short is insufficient. Near-expiry accounts must refresh before entering a later checkpoint. No member's qualification lifetime is extended, and a single short-lived account cannot shorten the interval for everyone else. New registrations and renewals cannot rewrite an already frozen epoch.
+
+The configured epoch duration should fit within ordinary cvld admission lifetime with renewal margin. The publisher cannot infer that lifetime from a verification key, and does not lengthen grants to compensate for a poorly matched configuration. Tests use 60-second epochs and normally 120-second admissions. Gate/rule allowance epochs may be different intervals; they need not force long eligibility snapshots.
 
 An empty or small complete checkpoint is valid, but the proof experiment still requires at least 17 included commitments so every sender-excluded group contains at least 16 others. Base allowance remains separate. A registry larger than the bounded depth-7 experiment supports must fail publication rather than silently truncate its list.
 
@@ -41,7 +43,7 @@ A client verifies the pinned signature, community, policy, exact field encodings
 
 A newly provisioned client needs a trusted starting checkpoint; a chain supplied solely by a malicious issuer does not provide independent truth. The pure verifier receives previous trusted checkpoint state explicitly; wallet persistence is a caller integration responsibility.
 
-The client derives every sender's proof group from this entire accepted snapshot and removes exactly that sender's enrolled commitment. It rejects a sender-proposed subset, changed interval, different policy or different membership digest. These local checks require a trusted complete starting view. The current acknowledgement wrapper implements the exact-whole-input check but does not yet authenticate network-fetched checkpoints.
+The client derives every sender's proof group from this entire accepted snapshot and removes exactly that sender's enrolled commitment. It rejects a sender-proposed subset, changed interval, different policy or different membership digest. These local checks require a trusted complete starting view. The registered acknowledgement wrapper authenticates supplied checkpoint objects; an actual network fetch and durable encrypted client-state adapter are not implemented here.
 
 Independent checkpoint witnessing or exchange between clients is needed to expose issuer equivocation. It can reveal conflicting signed digests without submitting allegations or conversation content, but cannot guarantee detection for isolated clients. This design does not invent a transparency protocol, custom circuit, blockchain or claim that signatures solve completeness. Reusing an existing append-only transparency implementation is the next step if this threat must be covered operationally.
 

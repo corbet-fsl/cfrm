@@ -4,8 +4,11 @@ A live, text-only profile protocol experiment. The owner is authenticated by its
 
 This is **an experimental client handler**, not a supported package export or deployed profile service. All **23 acceptance tests passed** on Crow repository 9, pipeline 7, at source `080cf7435acf8c23c2caa9a5bd50c7d5ae6a14a5`. The original 21-test contract ran at `49f85e491edbaece0781a174c202d43d77113f86`: the real AnonCreds prerequisite passed and 18 tests failed on absent implementation. Two purely negative tests also passed against the stubs; their positive behavior was established by the subsequent complete run.
 
+The later bounded Node socket adapter passed **40 tests** (23 protocol + 17 wire) in Crow repository 9, [pipeline 12](https://crow.corbet.ch/repos/9/pipeline/12), at `9555adbe289236691b1e766eaacbd82a2588c7e6`. This includes the real anonymous proof/owner signature flow over loopback, fragmented and invalid frames, deadlines, connection capacity, and disconnect/publication/lease races. Its explicit publication provider remains an application integration boundary; the synthetic provider is not Tor service ownership evidence.
+
 - [Functional and exact byte contract](SPEC.md)
 - [Acceptance tests](profiles.test.js)
+- [Socket boundary, hosted red/green evidence and limits](WIRE.md)
 - [Synthetic real-cryptography fixtures](fixtures.js)
 - [Explicit Node cryptography adapter](crypto-runtime.js)
 - [Cross-runtime cmsg owner-signature consumer](cmsg-signatures.js)
@@ -13,6 +16,6 @@ This is **an experimental client handler**, not a supported package export or de
 
 The workflows use pinned public cvld and cmsg revisions, synthetic keys and existing libraries. Real AnonCreds generation and verification with a full SHA-256 transcript nonce passed on the pinned native runtime. This deliberately differs from the specification's nominal 80-bit nonce guidance; compatibility with other implementations is not established. cmsg's fixed-purpose signatures have a separate cross-runtime consumer.
 
-The protocol uses byte frames and a narrow cryptography adapter for CSPRNG, SHA-256, SHA3-256 and Ed25519 verification. This experiment's adapter uses maintained Node crypto; a browser or native mobile client must supply equivalent reviewed operations and its own AnonCreds holder integration. No mobile or browser profile implementation is claimed. The owner handler is local to the member: application glue must publish it through the onion listener and activate/disconnect it with the local forum lease.
+The protocol uses byte frames and a narrow cryptography adapter for CSPRNG, SHA-256, SHA3-256 and Ed25519 verification. This experiment's adapter uses maintained Node crypto; a browser or native mobile client must supply equivalent reviewed operations and its own AnonCreds holder integration. No mobile or browser profile implementation is claimed. The bounded socket service controls the handler's lease/disconnect lifecycle and closes accepted sockets on observed loss. Application glue must still establish and verify the actual onion publication and supply an onion-only reader dialer.
 
 The in-memory onion adapter tests routing and failure behavior only. It does not demonstrate Tor transport, peer IP privacy or resistance to traffic analysis. No local cryptographic tests, provider accounts, phone checks, paid services or real onion services were used here.

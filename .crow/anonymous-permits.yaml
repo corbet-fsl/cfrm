@@ -1,0 +1,20 @@
+# Focused real blind-permit and owned SQLite concurrency contracts.
+when:
+  - event: manual
+skip_clone: true
+steps:
+  - name: verified-source-checkout
+    image: bash
+    commands:
+      - |
+        ci_source_dir="/workspaces/component-sources/cfrm"
+        ci_source_archive="$ci_source_dir/$CI_COMMIT_SHA.tar"
+        (cd "$ci_source_dir" && sha256sum --check "$CI_COMMIT_SHA.tar.sha256")
+        test "$(git get-tar-commit-id < "$ci_source_archive")" = "$CI_COMMIT_SHA"
+        tar --extract --touch --file "$ci_source_archive" --no-same-owner
+  - name: anonymous-permit-contracts
+    image: bash
+    depends_on: [verified-source-checkout]
+    commands:
+      - npm ci --prefix experiments/anonymous-permits --ignore-scripts --no-audit --no-fund
+      - timeout 180 npm test --prefix experiments/anonymous-permits

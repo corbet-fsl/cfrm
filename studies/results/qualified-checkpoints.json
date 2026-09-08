@@ -1,0 +1,15 @@
+{
+  "sourceCommit": "11acb6a30c23b28abaafe4c10e228efdaed90aae",
+  "redSourceCommit": "09c12d3a9c8f460e8eaf33763c897dc1a6e92c64",
+  "cvldCommit": "c416d9edd6f7f7259d84b88838b8e607b2166671",
+  "execution": "internal CI, synthetic inputs, verified source archives",
+  "tests": { "main": 55, "blindPermits": 16, "acknowledgement": 10, "enrollment": 11, "checkpoints": 13, "failed": 0 },
+  "registeredProofMembers": 17,
+  "excludedProofGroupMembers": 16,
+  "fixtureEpochSeconds": 60,
+  "ordinaryFixtureAdmissionSeconds": 120,
+  "checkpointContents": "ordered commitments only; no member IDs or chat keys",
+  "retention": "current full checkpoint plus bounded compact signed epoch links",
+  "explicitMaxRetainedLinksRange": [1, 4096],
+  "unvalidated": ["global issuer completeness or equivocation prevention", "anonymous network delivery", "native encrypted checkpoint-state persistence"]
+}

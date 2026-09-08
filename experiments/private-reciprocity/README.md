@@ -4,9 +4,9 @@ This experiment assembles existing Semaphore membership proofs and a SQLite repl
 
 ## Protocol
 
-The trusted eligibility snapshot contains stable member IDs and one stable Semaphore commitment per member, with a community scope and finite epoch validity. It is an eligibility set, not a live profile directory. For a sender S, both client and verifier reconstruct the complete qualified set excluding S. The minimum set is 16 other commitments; this experiment supports 100 members with a fixed depth-7 circuit.
+The registered protocol uses a [signed commitment-only checkpoint](SNAPSHOTS.md), scoped to one community, policy and finite epoch. The publisher freezes every enrolled commitment whose verified cvld qualification covers that entire epoch; the checkpoint contains no member IDs. A separately authenticated immutable binding identifies only the credited sender's commitment, which the client excludes from the proof group. At least 16 other commitments are required. The earlier `freezeEligibility` API retains synthetic member-ID maps as a baseline; the registered API does not publish those maps.
 
-The client refuses a proposed context if it differs from that complete trusted set. This prevents a verifier from requesting a smaller subset **when the client already has an authentic complete snapshot**. Authentic publication, completeness and the binding of a single stable Semaphore commitment to each cvld member remain integration requirements. An operator-provided list cannot independently prove its own completeness.
+The client authenticates the pinned checkpoint signer, exact ordered set and independent sender binding. It rejects changed signatures, altered lists and broken links to a retained previous checkpoint. This prevents unsupported member-selected subsets. A malicious issuer can still omit accounts or maintain isolated views; an issuer's own signature cannot independently prove honest completeness. Independent witnessing remains outside this experiment.
 
 The proof's scope is a stable hash of the community and sender ID, with no epoch. Its message binds the current epoch, eligibility digest and sender. Therefore the same hidden identity acknowledging the same sender produces the same nullifier even after an epoch or roster change. Acknowledging a different sender produces a different scoped nullifier. The actual Semaphore verifier checks the proof; the wrapper checks the exact trusted root, scope and message.
 
@@ -18,7 +18,7 @@ The operator sees the credited sender and a scoped opaque nullifier, plus whatev
 
 Lifetime pair uniqueness requires lifetime replay markers. This implementation stores a 32-byte scope and 32-byte nullifier per acknowledgement, plus SQLite overhead and an aggregate credit per sender scope. There is deliberately no epoch pruning of these markers. Deleting them while allowing the same identities to return would reopen credit farming. Retention ends only with a deliberate end of that community/accounting lifetime. The storage benchmark measures synthetic records separately from proof performance.
 
-The [immutable enrollment contract](ENROLLMENT.md) specifies the stable cvld-member-to-Semaphore binding. Eleven enrollment tests failed against an explicit stub before its implementation was added; all eleven subsequently passed with real certified Ed25519 and Semaphore signatures. `npm test` runs both suites, and explicit `test:acknowledgement` / `test:enrollment` scripts isolate their results. Qualification renewal, signed checkpoint publication and the native client signing integration remain separate work.
+The [immutable enrollment contract](ENROLLMENT.md) specifies the stable cvld-member-to-Semaphore binding. Fresh real cvld admission and certified key possession renew minimal registered qualification without replacing that binding. The publisher retains one current full checkpoint plus an explicitly capped collection of compact signed epoch links. Returning clients cannot silently bypass missing links. `npm test` runs acknowledgement, enrollment and checkpoint suites; explicit `test:acknowledgement`, `test:enrollment` and `test:checkpoints` scripts isolate their results. Native client signing, encrypted wallet checkpoint-state persistence and network delivery remain integrations.
 
 A colluding qualified member can endorse a sender without receiving a message. Excluding S prevents direct self-credit only when its one stable commitment is honestly bound. Owning multiple qualified identities remains an accepted Sybil limitation. Rotating a Semaphore identity would reset its nullifiers, so commitment rotation cannot be an unauthenticated way to regain first-contact credit. Minimum set size is not a guarantee of honest anonymity: colluding or otherwise known members reduce the effective anonymity set.
 
@@ -36,12 +36,14 @@ On a permitted test runner:
 ```sh
 npm ci --ignore-scripts --no-audit --no-fund
 npm run artifacts
-npm test
+CVLD_ADMISSION_MODULE=/absolute/path/to/pinned/cvld/src/admission.js npm test
 node storage-benchmark.js
 ```
 
-Only synthetic data enters CI. The initial [red phase](https://github.com/corbet-labs/cfrm/actions/runs/34259540769) recorded nine failing behavioral tests before implementation. The complete acknowledgement suite subsequently passed **10/10 tests**, including altered-artifact rejection, in internal CI at source `a10bd27d4fa1cd1a50035b4d136604652511ac20`, while all eleven enrollment tests still exercised the stub. The next internal run at `e56ce6466f8c169a6ff6dce5ba12a1d0dec58092` passed **10 acknowledgement and 11 enrollment tests**, alongside the main 55-test suite and 16 blind-permit tests.
+The checkpoint suite requires the actual pure cvld admission verifier; it does not substitute a fixture verifier. The recorded run pins cvld `c416d9edd6f7f7259d84b88838b8e607b2166671`.
 
-That run measured one proof at **968 ms / 1,035 serialized bytes** for a 99-member proof group after curve/identity initialization. A separate 10,000-record storage-only benchmark used **80.2816 incremental SQLite page bytes per marker**, including the single aggregate sender scope. See the [measured study](../../studies/private-acknowledgements.md) for scope and limits. No local desktop/laptop test execution occurred.
+Only synthetic data enters CI. The initial [red phase](https://github.com/corbet-labs/cfrm/actions/runs/34259540769) recorded nine failing behavioral tests before implementation. Enrollment and checkpoint suites also recorded their own genuine stub failures. The current registered protocol passed **13 checkpoint tests**, including a real 17-member proof and renewal across epochs, at source `11acb6a30c23b28abaafe4c10e228efdaed90aae`. The same run passed 10 baseline acknowledgement, 11 enrollment, 55 main and 16 blind-permit tests: **105 in total**.
+
+The earlier run at `e56ce6466f8c169a6ff6dce5ba12a1d0dec58092` measured one baseline proof at **968 ms / 1,035 serialized bytes** for a 99-member proof group after curve/identity initialization. A separate 10,000-record storage-only benchmark used **80.2816 incremental SQLite page bytes per marker**, including the single aggregate sender scope. See the [measured study](../../studies/private-acknowledgements.md) for scope and limits. No local desktop/laptop test execution occurred.
 
 Authored experiment code uses the root FSL-1.1-ALv2 license. Upstream dependency licenses remain in their packages.

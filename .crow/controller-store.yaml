@@ -1,0 +1,29 @@
+# Manual shared accounting contracts with real eligibility/proof/signature fixtures.
+when:
+  - event: manual
+skip_clone: true
+steps:
+  - name: verified-source-checkout
+    image: bash
+    commands:
+      - |
+        ci_source_dir="/workspaces/component-sources/cfrm"
+        ci_source_archive="$ci_source_dir/$CI_COMMIT_SHA.tar"
+        (cd "$ci_source_dir" && sha256sum --check "$CI_COMMIT_SHA.tar.sha256")
+        test "$(git get-tar-commit-id < "$ci_source_archive")" = "$CI_COMMIT_SHA"
+        tar --extract --touch --file "$ci_source_archive" --no-same-owner
+        ci_cvld_commit=c416d9edd6f7f7259d84b88838b8e607b2166671
+        ci_cvld_dir="/workspaces/component-sources/cvld"
+        (cd "$ci_cvld_dir" && sha256sum --check "$ci_cvld_commit.tar.sha256")
+        test "$(git get-tar-commit-id < "$ci_cvld_dir/$ci_cvld_commit.tar")" = "$ci_cvld_commit"
+        mkdir -p .dependencies/cvld
+        tar --extract --touch --file "$ci_cvld_dir/$ci_cvld_commit.tar" --directory .dependencies/cvld --no-same-owner
+  - name: shared-accounting-contracts
+    image: bash
+    depends_on: [verified-source-checkout]
+    commands:
+      - npm ci --prefix experiments/private-reciprocity --ignore-scripts --no-audit --no-fund
+      - npm run artifacts --prefix experiments/private-reciprocity
+      - npm ci --prefix experiments/directional-receipts --ignore-scripts --no-audit --no-fund
+      - npm ci --prefix experiments/anonymous-permits --ignore-scripts --no-audit --no-fund
+      - CVLD_ADMISSION_MODULE="$PWD/.dependencies/cvld/src/admission.js" timeout 1200 node --test --test-concurrency=1 experiments/directional-receipts/controller-store.test.js

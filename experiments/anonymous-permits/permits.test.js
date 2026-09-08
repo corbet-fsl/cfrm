@@ -3,6 +3,8 @@ import { test } from 'node:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+import { Worker } from 'node:worker_threads';
 import { createEpoch, openLedger, createIssuer, preparePermit, redeemPermit, prepareRedemption, redeemIntroduction } from './permits.js';
 
 const NOW = 1_800_000_000;
@@ -23,6 +25,92 @@ async function issue(issuer, context, allocation = 'allocation-a') {
   const client = await preparePermit(context.public);
   const response = await issuer.issue(allocation, client.request);
   return { client, response, permit: await client.finish(response) };
+}
+
+async function deadline(promise, milliseconds) {
+  let timer;
+  try {
+    return await Promise.race([promise, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(new Error('SQLite lock helper timed out')), milliseconds);
+    })]);
+  } finally { clearTimeout(timer); }
+}
+
+// This wrapper only schedules the race at an existing persistence boundary.
+// Maintained blind signing, the ledger transaction and SQLite locks remain real.
+// The worker changes time before releasing its write lock, so the operation's
+// BEGIN cannot acquire the lock with the time sampled by the caller pre-check.
+async function withWriterLock({ context, ledger, path }, method, releasedAt, operation) {
+  const shared = new Int32Array(new SharedArrayBuffer(3 * Int32Array.BYTES_PER_ELEMENT));
+  // [release request, trusted time, worker stage: 0 starting / 1 locked / 2 released]
+  Atomics.store(shared, 1, NOW);
+  const worker = new Worker(new URL('./sqlite-lock-holder.js', import.meta.url), {
+    workerData: { path, shared: shared.buffer, releasedAt },
+  });
+  let resolveReady, rejectReady, resolveExit, workerError;
+  const ready = new Promise((resolve, reject) => { resolveReady = resolve; rejectReady = reject; });
+  const exited = new Promise(resolve => { resolveExit = resolve; });
+  // Always handle startup failure, including cleanup before readiness is awaited.
+  ready.catch(() => {});
+  worker.on('message', message => {
+    if (message === 'locked') resolveReady();
+  });
+  worker.once('error', error => { workerError = error; rejectReady(error); });
+  worker.once('exit', code => {
+    rejectReady(new Error(`SQLite lock helper exited before readiness (${code})`));
+    resolveExit(code);
+  });
+  const release = () => { Atomics.store(shared, 0, 1); Atomics.notify(shared, 0); };
+  let boundaryCalls = 0;
+  const guardedLedger = {
+    ...ledger,
+    [method](...args) {
+      boundaryCalls++;
+      assert.equal(Atomics.load(shared, 2), 1, 'the other connection still owns the write lock');
+      assert.equal(Atomics.load(shared, 1), NOW, 'caller checks saw the live epoch');
+      release();
+      return ledger[method](...args);
+    },
+  };
+  try {
+    await deadline(ready, 10_000);
+    // Prove actual SQLite contention, independently of the worker's readiness flag.
+    const probe = new DatabaseSync(path);
+    let unexpectedlyAcquired = false;
+    try {
+      probe.exec('PRAGMA busy_timeout=0');
+      assert.throws(() => {
+        probe.exec('BEGIN IMMEDIATE');
+        unexpectedlyAcquired = true;
+      }, /database is locked/);
+    } finally {
+      if (unexpectedlyAcquired) probe.exec('ROLLBACK');
+      probe.close();
+    }
+    return await operation(createIssuer(context, guardedLedger, () => Atomics.load(shared, 1)));
+  } finally {
+    release();
+    let exitCode;
+    try { exitCode = await deadline(exited, 10_000); }
+    catch (error) {
+      await worker.terminate();
+      await exited;
+      throw error;
+    }
+    assert.equal(workerError, undefined, 'lock helper must not fail');
+    assert.equal(exitCode, 0, 'lock helper must exit successfully and be reaped');
+    assert.equal(Atomics.load(shared, 2), 2, 'the real holding transaction committed');
+    assert.equal(Atomics.load(shared, 1), releasedAt, 'time changed before that commit');
+    assert.equal(boundaryCalls, 1, 'the intended real ledger operation was reached');
+  }
+}
+
+function persistedAllocations(path) {
+  const db = new DatabaseSync(path);
+  try {
+    return db.prepare('SELECT id,quota,issued FROM allocations ORDER BY id').all()
+      .map(row => ({ ...row }));
+  } finally { db.close(); }
 }
 
 test('a real blind permit redeems once without account or recipient identifiers', async (t) => {
@@ -224,4 +312,52 @@ test('pruned epochs stay retired after restart even if the host wall clock moves
     assert.throws(() => createIssuer(context, restarted, () => NOW).allocate('allocation-a', 1));
     assert.equal(restarted.counts().spends, 0);
   } finally { restarted.close(); }
+});
+
+test('issuance after a real writer lock succeeds while the epoch remains live', { timeout: 30_000 }, async (t) => {
+  const state = await setup(t);
+  state.issuer.allocate('allocation-a', 1);
+  const client = await preparePermit(state.context.public);
+  const response = await withWriterLock(state, 'issue', NOW + 1,
+    issuer => issuer.issue('allocation-a', client.request));
+  const permit = await client.finish(response);
+  assert.equal(await redeemPermit(state.context.public, state.ledger, permit, () => NOW + 1), true);
+  assert.deepEqual(persistedAllocations(state.path), [{ id: 'allocation-a', quota: 1, issued: 1 }]);
+  assert.deepEqual(state.ledger.counts(), { allocations: 1, issuances: 1, spends: 1 });
+});
+
+test('expiry before acquiring the issuance write lock cannot issue or debit', { timeout: 30_000 }, async (t) => {
+  const state = await setup(t);
+  state.issuer.allocate('allocation-a', 1);
+  const client = await preparePermit(state.context.public);
+  let result;
+  await withWriterLock(state, 'issue', NOW + 600, async issuer => {
+    try { result = { response: await issuer.issue('allocation-a', client.request) }; }
+    catch (error) { result = { error }; }
+  });
+  // Check durable effects separately: a rejection must not merely hide a debit.
+  assert.deepEqual(persistedAllocations(state.path), [{ id: 'allocation-a', quota: 1, issued: 0 }]);
+  assert.deepEqual(state.ledger.counts(), { allocations: 1, issuances: 0, spends: 0 });
+  assert.equal(result.response, undefined);
+  assert.match(result.error?.message ?? '', /Permit issuance rejected/);
+});
+
+test('allocation after a real writer lock succeeds while the epoch remains live', { timeout: 30_000 }, async (t) => {
+  const state = await setup(t);
+  await withWriterLock(state, 'allocate', NOW + 1, issuer => issuer.allocate('allocation-a', 1));
+  assert.deepEqual(persistedAllocations(state.path), [{ id: 'allocation-a', quota: 1, issued: 0 }]);
+  const { permit } = await issue(createIssuer(state.context, state.ledger, () => NOW + 1), state.context);
+  assert.equal(await redeemPermit(state.context.public, state.ledger, permit, () => NOW + 1), true);
+});
+
+test('expiry before acquiring the allocation write lock cannot create allowance', { timeout: 30_000 }, async (t) => {
+  const state = await setup(t);
+  let error;
+  await withWriterLock(state, 'allocate', NOW + 600, issuer => {
+    try { issuer.allocate('allocation-a', 1); }
+    catch (failure) { error = failure; }
+  });
+  assert.deepEqual(persistedAllocations(state.path), []);
+  assert.deepEqual(state.ledger.counts(), { allocations: 0, issuances: 0, spends: 0 });
+  assert.ok(error instanceof Error, 'expired allocation must reject');
 });
