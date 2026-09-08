@@ -23,9 +23,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
-      - name: Resolve initial pinned dependency lock
-        run: |
-          npm install --ignore-scripts --no-audit --no-fund
-          cat package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run artifacts
       - run: npm test
+      - name: Quantify synthetic lifetime-nullifier storage
+        run: node storage-benchmark.js

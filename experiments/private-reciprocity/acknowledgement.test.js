@@ -1,7 +1,7 @@
 import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Identity } from '@semaphore-protocol/identity';
@@ -65,6 +65,8 @@ test('too-small sets, duplicate identities and duplicate member IDs fail closed'
   assert.throws(() => freezeEligibility({ ...snapshot, members: [...members, members[0]] }));
   assert.throws(() => freezeEligibility({ ...snapshot,
     members: [...members.slice(0, 99), { memberId: members[99].memberId, commitment: members[0].commitment }] }));
+  assert.throws(() => freezeEligibility({ ...snapshot,
+    members: [...members.slice(0, 99), { memberId: members[99].memberId, commitment: '0' }] }));
 });
 test('parallel replay through independent connections produces exactly one durable credit', async t => {
   const { snapshot, context, proof } = await sample();
@@ -134,4 +136,15 @@ test('caller mutations cannot substitute a previously frozen eligible set', asyn
   copy[0].commitment = '1';
   assert.notEqual(frozen.members[0].commitment, '1');
   assert.throws(() => { frozen.members[0].commitment = '1'; });
+});
+
+test('a changed proving artifact is rejected before executing its witness generator', async t => {
+  const { snapshot, context, identities } = await sample();
+  const directory = mkdtempSync(join(tmpdir(), 'cfrm-ack-artifact-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const changed = readFileSync(artifacts.wasm);
+  changed[0] ^= 1;
+  const path = join(directory, 'changed.wasm');
+  writeFileSync(path, changed);
+  await assert.rejects(proveAcknowledgement(identities[1], snapshot, context, { ...artifacts, wasm: path }));
 });

@@ -10,12 +10,12 @@ Presence is a lease with a bounded expiry, removed immediately on a clean discon
 
 Profiles stay with members. The rule experiment stores no profile text, pictures, IP addresses or network endpoints. The separate [real rendezvous library](../studies/rendezvous.md) verifies cvld certificates and signed chat-key challenges, retaining only live IDs, checksum-validated onion routes and bounded ephemeral session/replay state. It performs no network connection or content fetch. Peer discovery must not expose a member's network IP to malicious counterparts. No direct-network fallback or sender-controlled URL fetch is implemented or authorized by these libraries.
 
-| Information | Intended holder | Experiment representation |
+| Information | Intended holder | Current implementation |
 |---|---|---|
 | Profile | Member client | Absent |
-| Presence lease and rendezvous capability | Ephemeral rendezvous system | Synthetic ID and deadline |
+| Presence lease and rendezvous capability | Ephemeral rendezvous system | Real certified IDs, onion routes and bounded ephemeral sessions; synthetic presence also exists in the rule model |
 | Private first-contact history and local blocks | Member client, with cryptographic validity proofs as needed | Omniscient simulator maps |
-| Durable allowance and double-spend prevention | Hidden state commitments and minimal spent markers, mechanism unresolved | Plain synthetic counters |
+| Durable allowance and double-spend prevention | Hidden state commitments and minimal spent markers | Real [blind first-contact permits](../experiments/anonymous-permits/README.md) with SQLite anti-replay; complete private reciprocity/rule accounting remains incomplete |
 | Group roster and consent | Group participants | Synthetic `GroupExperiment` state |
 | Operational health | Aggregated, delayed measurements, privacy design unresolved | Aggregate experiment diagnostics |
 
@@ -25,10 +25,10 @@ The intended operator contract excludes relationship maps, sender-recipient pair
 
 The production shape is a trusted verifier receiving a holder-bound proof and authenticated challenge for the current community/session. cfrm must independently bind the resulting admission to that session's stable platform ID. It must not trust a browser-supplied `true`, an asserted ID, or an unbound copied credential.
 
-The current cvld verifier exposes `begin(trustedRegisteredPasskey, audience)` and `verify({id, audience, presentation, authentication})`. The challenge must be fresh, scoped and used once. A result cannot silently change the authenticated identity. Expiry and renewal are eligibility matters; cfrm's numerical rules remain separate. The simulator constructor takes an explicitly named synthetic eligibility oracle so experiments can change admission without pretending to implement that protocol.
+The current cvld verifier exposes `begin(credentialId, audience, chatPublicKey)` for an enrolled credential and `authenticate(...)`, which returns `{eligible: true, communityId, memberId, admission}` or `false`. Its one-use challenge authenticates the chat-key binding as well as eligibility. The resulting Ed25519 admission is checked locally through `cvld/admission`; rendezvous also requires a fresh signature from that certified chat key. The boolean-only `verify(...)` consumes the same kind of challenge but does not provide the reusable signed grant. Expiry and renewal are eligibility matters; cfrm's numerical rules remain separate. The simulator constructor takes an explicitly named synthetic eligibility oracle so experiments can change admission without pretending to implement that protocol.
 
 ## cmsg accounting seam
 
 A private introduction needs authorization for one permitted first-contact action, without exposing its counterpart to the operator. Existing conversation replies must not repeatedly consume first-contact tokens. A copied permit cannot be double-spent, changing the platform ID cannot reset a quota, and a participant cannot forge a reciprocal event alone.
 
-Private reciprocity needs authenticated distinct participants, first-contact uniqueness, consent, hidden state transitions and replay protection. A blind consumable permit can address one part, but does not by itself prove recipient consent, private counter correctness, noncollusion or absence of timing correlation. No production cryptographic accounting backend is implemented in the simulator.
+Private reciprocity needs authenticated distinct participants, first-contact uniqueness, consent, hidden state transitions and replay protection. The real blind-permit experiment addresses finite allowance spending without sending a recipient ID to the issuer; it does not prove recipient consent, private counter correctness, noncollusion or absence of timing correlation. The separate Semaphore acknowledgement experiment explores private eligible-member endorsements, with lifetime nullifiers and a sender-excluded set. It does not prove delivery or sincere interaction, and binding stable Semaphore identities to cvld accounts remains work. No complete production cryptographic accounting backend is implemented in the simulator.

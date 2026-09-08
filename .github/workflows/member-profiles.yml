@@ -1,0 +1,61 @@
+name: Member-held profiles specification
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'experiments/member-profiles/**'
+      - '.github/workflows/member-profiles.yml'
+  pull_request:
+    paths:
+      - 'experiments/member-profiles/**'
+      - '.github/workflows/member-profiles.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  anonymous-reader-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: corbet-labs/cvld
+          ref: c416d9edd6f7f7259d84b88838b8e607b2166671
+          path: .dependencies/cvld
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+        working-directory: .dependencies/cvld
+      - run: npm run prepare:native
+        working-directory: .dependencies/cvld
+      - run: npm test
+        working-directory: experiments/member-profiles
+        env:
+          CVLD_ROOT: ${{ github.workspace }}/.dependencies/cvld
+  certified-owner-signatures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: corbet-labs/cmsg
+          ref: 10118eede82dd6d2353bd1366aad9f744c03b4d8
+          path: .dependencies/cmsg
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - run: rustup toolchain install 1.91.0 --profile minimal
+      - run: cargo +1.91.0 build --locked --example profile_signing
+        working-directory: .dependencies/cmsg
+      - run: node experiments/member-profiles/cmsg-signatures.js
+        env:
+          CMSG_PROFILE_SIGNER: ${{ github.workspace }}/.dependencies/cmsg/target/debug/examples/profile_signing
