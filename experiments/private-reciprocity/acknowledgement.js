@@ -3,10 +3,7 @@ import { readFile, stat } from 'node:fs/promises';
 import { DatabaseSync } from 'node:sqlite';
 import { Group } from '@semaphore-protocol/group';
 import { generateProof, verifyProof } from '@semaphore-protocol/proof';
-
-// The commitment-only checkpoint integration has its own fail-first specification.
-export function proveRegisteredAcknowledgement() { throw new Error('Registered checkpoint specification precedes implementation'); }
-export function acceptRegisteredAcknowledgement() { throw new Error('Registered checkpoint specification precedes implementation'); }
+import { registeredAcknowledgementContext } from './checkpoints.js';
 
 const FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const UINT256 = 1n << 256n;
@@ -108,6 +105,15 @@ export async function proveAcknowledgement(identity, trustedSnapshot, proposed, 
   return generateProof(identity, group, context.message, context.scope, context.depth, await pinnedArtifacts(artifacts));
 }
 
+export async function proveRegisteredAcknowledgement(identity, checkpointInput, bindingInput, trust, artifacts) {
+  const checkpoint = structuredClone(checkpointInput);
+  const binding = structuredClone(bindingInput);
+  const context = registeredAcknowledgementContext(checkpoint, binding, trust);
+  const group = new Group(checkpoint.commitments.filter(value => value !== binding.commitment).map(BigInt));
+  if (group.indexOf(identity.commitment) < 0) throw new Error('An eligible distinct identity is required');
+  return generateProof(identity, group, context.message, context.scope, context.depth, await pinnedArtifacts(artifacts));
+}
+
 function active(context, now) {
   return positive(now) && now >= context.notBefore && now < context.expiresAt;
 }
@@ -146,10 +152,9 @@ export function openAcknowledgementLedger(path) {
   };
 }
 
-export async function acceptAcknowledgement(trustedSnapshot, proposed, proofInput, ledger, clock) {
+async function acceptContext(context, proofInput, ledger, clock) {
   try {
     if (typeof clock !== 'function') return false;
-    const context = expectedContext(trustedSnapshot, proposed);
     if (!active(context, clock()) || !exact(proofInput,
       ['merkleTreeDepth', 'merkleTreeRoot', 'nullifier', 'message', 'scope', 'points'])) return false;
     if (proofInput.merkleTreeDepth !== context.depth || proofInput.merkleTreeRoot !== context.root ||
@@ -161,5 +166,18 @@ export async function acceptAcknowledgement(trustedSnapshot, proposed, proofInpu
     const proof = structuredClone(proofInput);
     if (!(await verifyProof(proof))) return false;
     return ledger.accept(context, proof.nullifier, clock);
+  } catch { return false; }
+}
+
+export async function acceptAcknowledgement(trustedSnapshot, proposed, proofInput, ledger, clock) {
+  try { return await acceptContext(expectedContext(trustedSnapshot, proposed), proofInput, ledger, clock); }
+  catch { return false; }
+}
+
+export async function acceptRegisteredAcknowledgement(checkpointInput, bindingInput, trust, proofInput, ledger) {
+  try {
+    const checkpoint = structuredClone(checkpointInput);
+    const binding = structuredClone(bindingInput);
+    return await acceptContext(registeredAcknowledgementContext(checkpoint, binding, trust), proofInput, ledger, trust.clock);
   } catch { return false; }
 }

@@ -86,11 +86,23 @@ export function openEnrollmentLedger(path) {
       community TEXT NOT NULL, nonce BLOB NOT NULL, expires_at INTEGER NOT NULL,
       PRIMARY KEY(community,nonce)) WITHOUT ROWID;
     CREATE TABLE IF NOT EXISTS enrollment_clock (
-      community TEXT PRIMARY KEY, floor INTEGER NOT NULL) WITHOUT ROWID;`);
+      community TEXT PRIMARY KEY, floor INTEGER NOT NULL) WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS enrollment_qualifications (
+      community TEXT NOT NULL, member TEXT NOT NULL, policy TEXT NOT NULL, valid_until INTEGER NOT NULL,
+      PRIMARY KEY(community,member,policy), FOREIGN KEY(community,member) REFERENCES enrollment_bindings(community,member)) WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS checkpoint_heads (
+      community TEXT PRIMARY KEY, issuer_key_id TEXT NOT NULL, epoch_seconds INTEGER NOT NULL,
+      epoch INTEGER NOT NULL, digest TEXT NOT NULL, value TEXT NOT NULL) WITHOUT ROWID;
+    CREATE TABLE IF NOT EXISTS checkpoint_links (
+      community TEXT NOT NULL, epoch INTEGER NOT NULL, value TEXT NOT NULL,
+      PRIMARY KEY(community,epoch)) WITHOUT ROWID;`);
   return {
-    bind(challenge, clock) {
+    bind(challenge, clock, qualification) {
       enrollmentBytes(challenge);
       if (typeof clock !== 'function') throw new TypeError('A live clock is required');
+      if (!exact(qualification, ['policyDigest', 'validUntil']) || !integer(qualification.validUntil) ||
+        qualification.validUntil < challenge.expiresAt) throw new TypeError('Verified qualification bounds are required');
+      bytes(qualification.policyDigest, 32);
       const nonce = hash(bytes(challenge.challengeId, 32));
       db.exec('BEGIN IMMEDIATE');
       try {
@@ -114,6 +126,9 @@ export function openEnrollmentLedger(path) {
         }
         db.prepare(`INSERT INTO enrollment_bindings(community,member,commitment) VALUES (?,?,?)
           ON CONFLICT DO NOTHING`).run(challenge.communityId, challenge.memberId, challenge.commitment);
+        db.prepare(`INSERT INTO enrollment_qualifications(community,member,policy,valid_until) VALUES (?,?,?,?)
+          ON CONFLICT(community,member,policy) DO UPDATE SET valid_until=max(valid_until,excluded.valid_until)`)
+          .run(challenge.communityId, challenge.memberId, qualification.policyDigest, qualification.validUntil);
         db.prepare('INSERT INTO enrollment_replays(community,nonce,expires_at) VALUES (?,?,?)')
           .run(challenge.communityId, nonce, challenge.expiresAt);
         db.exec('COMMIT');
@@ -124,6 +139,74 @@ export function openEnrollmentLedger(path) {
       if (!scope(communityId)) throw new TypeError('Invalid community');
       return db.prepare('SELECT member AS memberId, commitment FROM enrollment_bindings WHERE community=? ORDER BY member')
         .all(communityId).map(row => ({ ...row }));
+    },
+    binding(communityId, memberId) {
+      if (!scope(communityId)) throw new TypeError('Invalid community');
+      bytes(memberId, 32);
+      const row = db.prepare('SELECT commitment FROM enrollment_bindings WHERE community=? AND member=?').get(communityId, memberId);
+      return row ? { ...row } : undefined;
+    },
+    publishCheckpoint(configuration, build, clock) {
+      // Only the trusted publisher calls this internal transaction API. Its public
+      // operation takes no roster input; the entire registered set is selected here.
+      const { communityId, policyDigest, issuerKeyId, epochSeconds, minAnonymity, depth, maxRetainedLinks } = configuration;
+      if (!scope(communityId) || typeof build !== 'function' || typeof clock !== 'function' ||
+        !integer(epochSeconds) || epochSeconds > 2678400 || !integer(maxRetainedLinks) || maxRetainedLinks > 4096 ||
+        !integer(minAnonymity) || minAnonymity < 16 || minAnonymity > 128 || depth !== 7) throw new TypeError('Invalid checkpoint configuration');
+      bytes(policyDigest, 32); bytes(issuerKeyId, 32);
+      db.exec('BEGIN IMMEDIATE');
+      try {
+        const now = clock();
+        const floor = db.prepare('SELECT floor FROM enrollment_clock WHERE community=?').get(communityId)?.floor ?? 0;
+        const head = db.prepare('SELECT * FROM checkpoint_heads WHERE community=?').get(communityId);
+        const epoch = Math.floor(now / epochSeconds);
+        const expiresAt = (epoch + 1) * epochSeconds;
+        if (!integer(now) || now < floor || !integer(epoch) || !integer(expiresAt) ||
+          (head && (head.issuer_key_id !== issuerKeyId || head.epoch_seconds !== epochSeconds || epoch < head.epoch))) {
+          throw new Error('Checkpoint clock, epoch or issuer configuration cannot roll back or silently change');
+        }
+        db.prepare(`INSERT INTO enrollment_clock(community,floor) VALUES (?,?)
+          ON CONFLICT(community) DO UPDATE SET floor=excluded.floor`).run(communityId, now);
+        if (head && epoch === head.epoch) {
+          const existing = JSON.parse(head.value);
+          if (existing.policyDigest !== policyDigest || existing.minAnonymity !== minAnonymity || existing.depth !== depth) {
+            throw new Error('The current epoch configuration is already immutable');
+          }
+          db.exec('COMMIT');
+          return existing;
+        }
+        // Drop expired qualification metadata, retaining immutable identity binding.
+        db.prepare('DELETE FROM enrollment_qualifications WHERE community=? AND valid_until<=?').run(communityId, now);
+        const commitments = db.prepare(`SELECT b.commitment FROM enrollment_bindings b
+          JOIN enrollment_qualifications q ON q.community=b.community AND q.member=b.member
+          WHERE b.community=? AND q.policy=? AND q.valid_until>=?`).all(communityId, policyDigest, expiresAt)
+          .map(row => row.commitment).sort((a, b) => BigInt(a) < BigInt(b) ? -1 : BigInt(a) > BigInt(b) ? 1 : 0);
+        if (commitments.length > 129) throw new Error('Complete registry exceeds the bounded proof capacity');
+        const produced = build({ epoch, notBefore: now, expiresAt, previousDigest: head?.digest ?? null, commitments });
+        if (!produced || typeof produced.then === 'function') throw new TypeError('Synchronous checkpoint signing is required');
+        const { checkpoint, link } = produced;
+        const encoded = JSON.stringify(checkpoint);
+        const encodedLink = JSON.stringify(link);
+        if (!encoded || !encodedLink || Buffer.byteLength(encoded) > 32768 || Buffer.byteLength(encodedLink) > 2048) {
+          throw new TypeError('Checkpoint encoding exceeds the experiment bounds');
+        }
+        db.prepare(`INSERT INTO checkpoint_heads(community,issuer_key_id,epoch_seconds,epoch,digest,value) VALUES (?,?,?,?,?,?)
+          ON CONFLICT(community) DO UPDATE SET epoch=excluded.epoch,digest=excluded.digest,value=excluded.value`)
+          .run(communityId, issuerKeyId, epochSeconds, epoch, checkpoint.digest, encoded);
+        db.prepare('INSERT INTO checkpoint_links(community,epoch,value) VALUES (?,?,?)').run(communityId, epoch, encodedLink);
+        db.prepare(`DELETE FROM checkpoint_links WHERE community=? AND epoch NOT IN
+          (SELECT epoch FROM checkpoint_links WHERE community=? ORDER BY epoch DESC LIMIT ?)`)
+          .run(communityId, communityId, maxRetainedLinks);
+        db.exec('COMMIT');
+        return JSON.parse(encoded);
+      } catch (error) { db.exec('ROLLBACK'); throw error; }
+    },
+    checkpointLinks(communityId, afterEpoch, beforeEpoch) {
+      if (!scope(communityId) || !integer(afterEpoch) || !integer(beforeEpoch) || beforeEpoch <= afterEpoch) {
+        throw new TypeError('Invalid checkpoint link interval');
+      }
+      return db.prepare('SELECT value FROM checkpoint_links WHERE community=? AND epoch>? AND epoch<? ORDER BY epoch')
+        .all(communityId, afterEpoch, beforeEpoch).map(row => JSON.parse(row.value));
     },
     close() { if (db.isOpen) db.close(); },
   };
@@ -186,7 +269,7 @@ export function createEnrollmentService(options) {
         if (Identity.generateCommitment(candidate).toString() !== challenge.commitment ||
           !Identity.verifySignature(enrollmentMessage(challenge), signature, candidate)) return false;
         // Grant expiry clips the signed challenge; ledger rechecks time after all async verification.
-        return ledger.bind(challenge, time);
+        return ledger.bind(challenge, time, { policyDigest: grant.policyDigest, validUntil: grant.expiresAt });
       } catch { return false; }
     },
     close() { closed = true; secret.fill(0); },

@@ -1,6 +1,6 @@
 # Authenticated complete eligibility checkpoints
 
-This is a fail-first contract; the new checkpoint functions are explicit stubs pending their red run. It is not an implemented transparency system. A signature can authenticate a checkpoint; it cannot prove that the checkpoint issuer told the truth or showed everyone the same checkpoint.
+Thirteen tests failed against the explicit checkpoint stubs at source `09c12d3a9c8f460e8eaf33763c897dc1a6e92c64` in internal CI. The corresponding implementation now awaits its first execution. This is not a transparency system: a signature can authenticate a checkpoint, but cannot prove that the checkpoint issuer told the truth or showed everyone the same checkpoint.
 
 ## Inputs and lifecycle
 
