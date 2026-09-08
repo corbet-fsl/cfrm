@@ -99,7 +99,7 @@ test('a new epoch and roster do not reset lifetime pair uniqueness', async t => 
   assert.equal(await acceptAcknowledgement(later, laterContext, laterProof, store, () => NOW + 61), false);
   assert.equal(store.credits(context.scope), 1);
 });
-test('different senders have unlinkable scopes and independently bounded acknowledgement slots', async t => {
+test('different senders use distinct scopes and independently bounded acknowledgement slots', async t => {
   const { snapshot, context, proof, identities, members } = await sample();
   const { store } = ledger(t);
   const other = acknowledgementContext(snapshot, members[2].memberId);

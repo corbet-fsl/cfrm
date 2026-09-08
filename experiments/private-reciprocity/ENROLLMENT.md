@@ -1,6 +1,6 @@
 # Immutable Semaphore enrollment contract
 
-This is a bounded contract and adversarial specification. Eleven tests failed against the explicit stub in the internal CI run for source `a10bd27d4fa1cd1a50035b4d136604652511ac20`; the subsequent implementation is awaiting its first execution. It is not yet a validated key-possession protocol or a completed cvld integration.
+This is a bounded contract and adversarial specification. Eleven tests failed against the explicit stub at source `a10bd27d4fa1cd1a50035b4d136604652511ac20` and passed against the implementation at `e56ce6466f8c169a6ff6dce5ba12a1d0dec58092` in internal CI. This validates the specified fixture behaviors with real signatures; it is not an external audit or a completed native cvld/cmsg integration. See the [measured study](../../studies/private-acknowledgements.md).
 
 ## Identity lifetime
 

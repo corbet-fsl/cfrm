@@ -1,0 +1,17 @@
+{
+  "sourceCommit": "e56ce6466f8c169a6ff6dce5ba12a1d0dec58092",
+  "execution": "internal CI, synthetic inputs, verified source archive",
+  "nodeVersion": "24.19.0",
+  "tests": { "main": 55, "blindPermits": 16, "acknowledgement": 10, "enrollment": 11, "failed": 0 },
+  "proofSample": {
+    "count": 1, "groupMembers": 99, "depth": 7,
+    "milliseconds": 968, "serializedBytes": 1035,
+    "excludes": ["curve initialization", "identity initialization", "network transport"]
+  },
+  "syntheticStorage": {
+    "records": 10000, "scopes": 1, "rawNullifierBytes": 640000,
+    "emptySqlitePageBytes": 12288, "filledSqlitePageBytes": 815104,
+    "incrementalPageBytesPerRecord": 80.2816,
+    "excludes": ["WAL files", "backups", "filesystem overhead", "proof generation"]
+  }
+}

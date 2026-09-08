@@ -1,6 +1,6 @@
-# Member-held public profiles: proposed protocol
+# Member-held public profiles: experimental protocol
 
-Status: approved design with fail-first acceptance tests; not implemented. No runtime result is claimed while GitHub Actions cannot schedule the experiment. This directory is not a supported package export.
+Status: the native nonce prerequisite passed and the absent implementation produced a genuine failing acceptance run on Crow. The client protocol implementation awaits its complete green run. This directory is not a supported package export or deployed onion service.
 
 ## Functional boundary
 
@@ -53,7 +53,9 @@ The proposal binds the full owner transcript using:
 nonce = decimal_integer_big_endian(SHA256(challengeSigningBytes))
 ```
 
-The [AnonCreds specification](https://anoncreds.github.io/anoncreds-spec/) describes an 80-bit nonce. The pinned [anoncreds-rs 0.2.3 parser](https://github.com/anoncreds/anoncreds-rs/blob/v0.2.3/src/data_types/nonce.rs) accepts larger positive decimal integers, but parser inspection is not execution evidence. The first acceptance test must demonstrate actual issuance, proof generation and verification using the full 256-bit transcript digest, with altered transcripts rejected. **The protocol must remain unavailable unless that compatibility prerequisite passes.** No silent 80-bit truncation or claim of universal standards interoperability is permitted.
+The [AnonCreds specification](https://anoncreds.github.io/anoncreds-spec/) describes an 80-bit nonce. The pinned [anoncreds-rs 0.2.3 parser](https://github.com/anoncreds/anoncreds-rs/blob/v0.2.3/src/data_types/nonce.rs) accepts larger positive decimal integers. The first acceptance test passed on Crow against revision `49f85e491edbaece0781a174c202d43d77113f86`: actual issuance, proof generation and verification used the full 256-bit transcript digest, and altered transcripts failed verification. No silent 80-bit truncation or claim of universal standards interoperability is permitted.
+
+The protocol checks both the displayed `raw` attribute and its authenticated AnonCreds `encoded` value for the configured community and policy. Checking the display string alone would not bind the claimed scope. It rejects unsolicited revealed attributes, self-attestation, unexpected credential identifiers and extra frame fields before releasing text.
 
 Fresh randomized presentations are an existing AnonCreds mechanism. Serialization tests can show absent stable values and different presentations; they cannot prove a deployed client or transport is unlinkable. The future reusable holder/proof API belongs inside cvld; this cfrm experiment exercises the boundary without modifying cvld's published holder API.
 
@@ -88,4 +90,4 @@ Frames are bounded before decoding or parsing. Unknown fields, malformed encodin
 
 Acceptance tests use real cvld issuance, AnonCreds proofs and Ed25519 owner signatures with synthetic facts. Native dependencies come from an explicitly pinned public cvld checkout in the dedicated CI workflow. The test transport is an in-memory onion-capability double, deliberately not evidence of Tor anonymity. cmsg's real fixed-purpose methods require a separate cross-runtime vector/integration check after their implementation; the local signing fixture alone does not establish that integration.
 
-No local tests, installs, paid services, provider authentication or real Tor endpoint were used to author this specification. This directory currently contains absent-implementation stubs so that the acceptance suite will fail until the behavior exists.
+No local tests, installs, paid services, provider authentication or real Tor endpoint were used. The core exchanges plain byte arrays and JSON. `crypto-runtime.js` is an explicit Node adapter to maintained CSPRNG, SHA-256, SHA3-256 and Ed25519 operations; it is the replacement boundary for a native/mobile runtime. The owner remains a local handler; the experiment does not publish an onion listener or demonstrate IP privacy.

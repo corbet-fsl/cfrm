@@ -266,3 +266,27 @@ test('anonymous proof work has an explicit concurrency cap without a viewer iden
   const results = await finished;
   assert.equal(results.filter(result => result.status === 'fulfilled').length, 2);
 });
+
+test('encoded community and policy values cannot contradict their display strings even before native verification', async () => {
+  let calls = 0;
+  const f = await protocolFixture({ owner: { verifyEligibilityProof: () => { calls++; return true; } } });
+  for (const name of ['community_id', 'policy']) {
+    const envelope = decode(await f.owner.handle(frame({ hello: { version: 1, readerNonce: randomId() } }))).challenge;
+    const presentation = f.credential.prove(referenceRequest(f.credential.issuer, envelope.value));
+    presentation.requested_proof.revealed_attrs[name].encoded = '17';
+    await assert.rejects(f.owner.handle(frame({ read: { challenge: envelope.value, ownerSignature: envelope.signature, presentation } })));
+  }
+  assert.equal(calls, 0);
+});
+
+test('a syntactically valid but checksum-invalid onion host is rejected before dialing', async () => {
+  const f = await protocolFixture();
+  let calls = 0;
+  const broken = `${ENDPOINT.host[0] === 'a' ? 'b' : 'a'}${ENDPOINT.host.slice(1)}`;
+  await assert.rejects(Promise.resolve().then(() => createProfileReader({ ...f.trust, limits: f.limits, clock: () => NOW,
+    expectedOwner: { memberId: f.grant.memberId, endpoint: { host: broken, port: ENDPOINT.port } },
+    onionTransport: { open() { calls++; throw new Error('Dialed'); } },
+    proveEligibility: () => { throw new Error('Wallet called'); },
+  }).read()));
+  assert.equal(calls, 0);
+});
