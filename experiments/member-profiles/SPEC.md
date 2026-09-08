@@ -1,6 +1,6 @@
 # Member-held public profiles: experimental protocol
 
-Status: the native nonce prerequisite passed and the absent implementation produced a genuine failing acceptance run on Crow. The client protocol implementation awaits its complete green run. This directory is not a supported package export or deployed onion service.
+Status: all 23 client protocol acceptance tests passed on Crow repository 9, pipeline 7, at source `080cf7435acf8c23c2caa9a5bd50c7d5ae6a14a5`. The native nonce prerequisite passed before implementation and 18 tests failed against the original stubs. This directory is not a supported package export or deployed onion service.
 
 ## Functional boundary
 

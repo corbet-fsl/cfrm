@@ -6,9 +6,10 @@
   "engines": { "node": ">=24" },
   "scripts": {
     "artifacts": "node fetch-artifacts.js",
-    "test": "node --test --test-concurrency=1 acknowledgement.test.js enrollment.test.js",
+    "test": "node --test --test-concurrency=1 acknowledgement.test.js enrollment.test.js checkpoints.test.js",
     "test:acknowledgement": "node --test --test-concurrency=1 acknowledgement.test.js",
-    "test:enrollment": "node --test --test-concurrency=1 enrollment.test.js"
+    "test:enrollment": "node --test --test-concurrency=1 enrollment.test.js",
+    "test:checkpoints": "node --test --test-concurrency=1 checkpoints.test.js"
   },
   "license": "SEE LICENSE IN ../../LICENSE.md",
   "dependencies": {

@@ -13,12 +13,18 @@ steps:
         (cd "$ci_source_dir" && sha256sum --check "$CI_COMMIT_SHA.tar.sha256")
         test "$(git get-tar-commit-id < "$ci_source_archive")" = "$CI_COMMIT_SHA"
         tar --extract --file "$ci_source_archive" --no-same-owner
+        ci_cvld_commit=c416d9edd6f7f7259d84b88838b8e607b2166671
+        ci_cvld_dir="/workspaces/component-sources/cvld"
+        (cd "$ci_cvld_dir" && sha256sum --check "$ci_cvld_commit.tar.sha256")
+        test "$(git get-tar-commit-id < "$ci_cvld_dir/$ci_cvld_commit.tar")" = "$ci_cvld_commit"
+        mkdir -p .dependencies/cvld
+        tar --extract --file "$ci_cvld_dir/$ci_cvld_commit.tar" --directory .dependencies/cvld --no-same-owner
   - name: numerical-and-rendezvous-tests
     image: bash
     depends_on: [verified-source-checkout]
     commands:
       - node --version
-      - npm test
+      - CVLD_ADMISSION_MODULE="$PWD/.dependencies/cvld/src/admission.js" npm test
   - name: anonymous-permit-tests
     image: bash
     depends_on: [numerical-and-rendezvous-tests]
@@ -35,5 +41,6 @@ steps:
         ci_test_status=0
         npm run test:acknowledgement --prefix experiments/private-reciprocity || ci_test_status=1
         npm run test:enrollment --prefix experiments/private-reciprocity || ci_test_status=1
+        CVLD_ADMISSION_MODULE="$PWD/.dependencies/cvld/src/admission.js" npm run test:checkpoints --prefix experiments/private-reciprocity || ci_test_status=1
         node experiments/private-reciprocity/storage-benchmark.js || ci_test_status=1
         exit "$ci_test_status"

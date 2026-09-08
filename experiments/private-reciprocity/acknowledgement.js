@@ -4,6 +4,10 @@ import { DatabaseSync } from 'node:sqlite';
 import { Group } from '@semaphore-protocol/group';
 import { generateProof, verifyProof } from '@semaphore-protocol/proof';
 
+// The commitment-only checkpoint integration has its own fail-first specification.
+export function proveRegisteredAcknowledgement() { throw new Error('Registered checkpoint specification precedes implementation'); }
+export function acceptRegisteredAcknowledgement() { throw new Error('Registered checkpoint specification precedes implementation'); }
+
 const FIELD = 21888242871839275222246405745257275088548364400416034343698204186575808495617n;
 const UINT256 = 1n << 256n;
 const json = value => Buffer.from(JSON.stringify(value));

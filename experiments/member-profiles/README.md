@@ -2,7 +2,7 @@
 
 A live, text-only profile protocol experiment. The owner is authenticated by its stable cvld identity and cmsg chat key. Passive readers prove anonymous eligibility using AnonCreds; they do not disclose their member ID. The rendezvous operator never receives profile text or a per-view lookup.
 
-This is **an experimental client handler awaiting its first complete acceptance run**, not a supported package export or deployed profile service. The original 21-test contract ran on Crow at `49f85e491edbaece0781a174c202d43d77113f86`: the real AnonCreds prerequisite passed and 18 tests failed on absent implementation. Two additional negative tests passed against the stubs; that alone did not establish their security behavior. The implementation and two additional regression tests now require a complete green run.
+This is **an experimental client handler**, not a supported package export or deployed profile service. All **23 acceptance tests passed** on Crow repository 9, pipeline 7, at source `080cf7435acf8c23c2caa9a5bd50c7d5ae6a14a5`. The original 21-test contract ran at `49f85e491edbaece0781a174c202d43d77113f86`: the real AnonCreds prerequisite passed and 18 tests failed on absent implementation. Two purely negative tests also passed against the stubs; their positive behavior was established by the subsequent complete run.
 
 - [Functional and exact byte contract](SPEC.md)
 - [Acceptance tests](profiles.test.js)
