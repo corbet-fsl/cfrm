@@ -1,0 +1,13 @@
+# Anonymous first-contact permits
+
+A test-driven experiment using RFC 9474 blind RSA signatures and a SQLite ledger. The issuer spends a trusted allocation while seeing only a blinded request. Redemption supplies a random permit and signature, without an account or recipient ID. Real cryptographic and concurrency tests come before implementation.
+
+The initial nine tests pass at `312134e` ([run 34257993433](https://github.com/corbet-labs/cfrm/actions/runs/34257993433)). Three further regressions failed at `d5aa264` and pass at `5251e93` ([run 34258369141](https://github.com/corbet-labs/cfrm/actions/runs/34258369141)): validity is rechecked under the SQLite write lock after cryptographic verification, concurrent expiry/pruning cannot resurrect spends, and distinct trusted issuer keys have distinct ledger domains. Issuance cheaply rejects missing or exhausted allocations before private-key operations.
+
+An additional recipient-retry experiment uses `prepareRedemption(permit)` to create a recipient-generated random claim and `redeemIntroduction(context, ledger, redemption, clock)` to return `{accepted: boolean}`. A valid permit can be accepted by only one claim; that same claim can retry after a lost response or server restart while the epoch remains valid. The server retains a hash of the claim beside the random permit nullifier, without member/group identifiers. The recipient must durably persist the exact pending claim before submitting it and must never accept a sender-chosen claim. These three tests have a recorded behavioral red run [34259032989](https://github.com/corbet-labs/cfrm/actions/runs/34259032989); implementation validation follows separately.
+
+This is not a complete private reciprocity protocol. Network timing, anonymous redemption transport, malicious-recipient behavior, token transfer, allocation authentication and reward semantics remain separate. Cryptographic blindness does not imply traffic-analysis resistance. Each scope/epoch uses a fresh signing key shared across its members; never issue per-person identifying keys. The host must select a trusted immutable epoch catalog, provide trusted time, and restrict allocation/pruning methods to its own rules service. An expired pending attempt cannot be recovered after expiry merely by retrying its claim. Device snapshot freshness and crash-safe client commits are separate from server idempotency.
+
+Run `npm ci --ignore-scripts` and `npm test` in this directory on a permitted test runner. Only synthetic data belongs in these tests.
+
+Dependency: [Cloudflare blindrsa-ts](https://github.com/cloudflare/blindrsa-ts), Apache-2.0; protocol [RFC 9474](https://www.rfc-editor.org/rfc/rfc9474.html). Repository-authored experiment code uses the root license.

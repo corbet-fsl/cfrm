@@ -1,0 +1,17 @@
+{
+  "project": "Semaphore",
+  "circuitVersion": "4.13.0",
+  "depth": 7,
+  "files": {
+    "wasm": {
+      "url": "https://snark-artifacts.pse.dev/semaphore/4.13.0/semaphore-7.wasm",
+      "sha256": "3ba75768d5dfbee9d52b732b69eefb1725c8c356a3de9c2f2a71dbc401a0ea61",
+      "bytes": 1810182
+    },
+    "zkey": {
+      "url": "https://snark-artifacts.pse.dev/semaphore/4.13.0/semaphore-7.zkey",
+      "sha256": "d77851ee4bd496c6b5f70fbfa550f113a89bad972efd4c541267e566163d0600",
+      "bytes": 2113447
+    }
+  }
+}

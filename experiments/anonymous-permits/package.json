@@ -1,0 +1,15 @@
+{
+  "name": "cfrm-anonymous-permits-experiment",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 permits.test.js"
+  },
+  "dependencies": {
+    "@cloudflare/blindrsa-ts": "0.4.6"
+  }
+}

@@ -1,0 +1,248 @@
+{
+  "config": {
+    "seed": 42,
+    "epochs": 8,
+    "rounds": 12,
+    "participants": 100,
+    "population": {
+      "cooperative": 64,
+      "flooder": 10,
+      "nonreciprocator": 10,
+      "colluding-pair": 2,
+      "colluding-ring": 8,
+      "resetter": 6
+    },
+    "policy": {
+      "initialTokens": 3,
+      "epochGrant": 2,
+      "maxEpochGrant": 6,
+      "tokenCap": 8,
+      "growthPerActiveEpoch": 1,
+      "maxImbalance": 3,
+      "pendingCap": 3,
+      "requestTtl": 5,
+      "presenceTtl": 20,
+      "voting": false
+    }
+  },
+  "bound": 4500,
+  "invariants": {
+    "withinGrantBound": true,
+    "withinTokenCap": true,
+    "nonnegativeTokens": true
+  },
+  "final": {
+    "epoch": 7,
+    "registeredMembers": 100,
+    "activeMembers": 0,
+    "approaches": 661,
+    "reciprocated": 421,
+    "declines": 176,
+    "matureMembers": 89,
+    "totalGranted": 3365,
+    "maxBalance": 8,
+    "rejections": {
+      "outbound-imbalance": 22310,
+      "inbox-full": 38,
+      "no-tokens": 5521,
+      "already-contacted": 2248,
+      "inbound-imbalance": 180
+    }
+  },
+  "byBehavior": {
+    "cooperative": {
+      "participants": 64,
+      "approaches": 509,
+      "maxActiveEpochs": 7,
+      "maxInboundImbalance": -3,
+      "maxOutboundImbalance": 3,
+      "totalGranted": 2344
+    },
+    "flooder": {
+      "participants": 10,
+      "approaches": 74,
+      "maxActiveEpochs": 4,
+      "maxInboundImbalance": -3,
+      "maxOutboundImbalance": 3,
+      "totalGranted": 298
+    },
+    "nonreciprocator": {
+      "participants": 10,
+      "approaches": 0,
+      "maxActiveEpochs": 0,
+      "maxInboundImbalance": 3,
+      "maxOutboundImbalance": -1,
+      "totalGranted": 170
+    },
+    "colluding-pair": {
+      "participants": 2,
+      "approaches": 1,
+      "maxActiveEpochs": 1,
+      "maxInboundImbalance": 0,
+      "maxOutboundImbalance": 0,
+      "totalGranted": 48
+    },
+    "colluding-ring": {
+      "participants": 8,
+      "approaches": 28,
+      "maxActiveEpochs": 4,
+      "maxInboundImbalance": 0,
+      "maxOutboundImbalance": 0,
+      "totalGranted": 312
+    },
+    "resetter": {
+      "participants": 6,
+      "approaches": 49,
+      "maxActiveEpochs": 4,
+      "maxInboundImbalance": -3,
+      "maxOutboundImbalance": 3,
+      "totalGranted": 193
+    }
+  },
+  "timeline": [
+    {
+      "epoch": 0,
+      "registeredMembers": 100,
+      "activeMembers": 100,
+      "approaches": 223,
+      "reciprocated": 144,
+      "declines": 58,
+      "matureMembers": 0,
+      "totalGranted": 300,
+      "maxBalance": 3,
+      "rejections": {
+        "outbound-imbalance": 468,
+        "inbox-full": 6,
+        "no-tokens": 3188,
+        "already-contacted": 93,
+        "inbound-imbalance": 7
+      }
+    },
+    {
+      "epoch": 1,
+      "registeredMembers": 100,
+      "activeMembers": 100,
+      "approaches": 416,
+      "reciprocated": 269,
+      "declines": 110,
+      "matureMembers": 89,
+      "totalGranted": 589,
+      "maxBalance": 6,
+      "rejections": {
+        "outbound-imbalance": 2297,
+        "inbox-full": 25,
+        "no-tokens": 4853,
+        "already-contacted": 280,
+        "inbound-imbalance": 50
+      }
+    },
+    {
+      "epoch": 2,
+      "registeredMembers": 100,
+      "activeMembers": 100,
+      "approaches": 544,
+      "reciprocated": 352,
+      "declines": 141,
+      "matureMembers": 89,
+      "totalGranted": 959,
+      "maxBalance": 8,
+      "rejections": {
+        "outbound-imbalance": 5239,
+        "inbox-full": 30,
+        "no-tokens": 5360,
+        "already-contacted": 545,
+        "inbound-imbalance": 113
+      }
+    },
+    {
+      "epoch": 3,
+      "registeredMembers": 100,
+      "activeMembers": 100,
+      "approaches": 615,
+      "reciprocated": 397,
+      "declines": 160,
+      "matureMembers": 89,
+      "totalGranted": 1397,
+      "maxBalance": 8,
+      "rejections": {
+        "outbound-imbalance": 8530,
+        "inbox-full": 38,
+        "no-tokens": 5521,
+        "already-contacted": 835,
+        "inbound-imbalance": 149
+      }
+    },
+    {
+      "epoch": 4,
+      "registeredMembers": 100,
+      "activeMembers": 100,
+      "approaches": 640,
+      "reciprocated": 411,
+      "declines": 168,
+      "matureMembers": 89,
+      "totalGranted": 1883,
+      "maxBalance": 8,
+      "rejections": {
+        "outbound-imbalance": 11974,
+        "inbox-full": 38,
+        "no-tokens": 5521,
+        "already-contacted": 1161,
+        "inbound-imbalance": 170
+      }
+    },
+    {
+      "epoch": 5,
+      "registeredMembers": 100,
+      "activeMembers": 100,
+      "approaches": 651,
+      "reciprocated": 417,
+      "declines": 173,
+      "matureMembers": 89,
+      "totalGranted": 2373,
+      "maxBalance": 8,
+      "rejections": {
+        "outbound-imbalance": 15412,
+        "inbox-full": 38,
+        "no-tokens": 5521,
+        "already-contacted": 1514,
+        "inbound-imbalance": 170
+      }
+    },
+    {
+      "epoch": 6,
+      "registeredMembers": 100,
+      "activeMembers": 100,
+      "approaches": 660,
+      "reciprocated": 421,
+      "declines": 175,
+      "matureMembers": 89,
+      "totalGranted": 2868,
+      "maxBalance": 8,
+      "rejections": {
+        "outbound-imbalance": 18873,
+        "inbox-full": 38,
+        "no-tokens": 5521,
+        "already-contacted": 1877,
+        "inbound-imbalance": 176
+      }
+    },
+    {
+      "epoch": 7,
+      "registeredMembers": 100,
+      "activeMembers": 100,
+      "approaches": 661,
+      "reciprocated": 421,
+      "declines": 176,
+      "matureMembers": 89,
+      "totalGranted": 3365,
+      "maxBalance": 8,
+      "rejections": {
+        "outbound-imbalance": 22310,
+        "inbox-full": 38,
+        "no-tokens": 5521,
+        "already-contacted": 2248,
+        "inbound-imbalance": 180
+      }
+    }
+  ]
+}

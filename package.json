@@ -1,0 +1,19 @@
+{
+  "name": "cfrm",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "description": "Ephemeral onion rendezvous and experiments for numerical participation rules",
+  "type": "module",
+  "exports": {
+    "./rendezvous": "./src/rendezvous.js",
+    "./experiments": "./src/simulate.js"
+  },
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "experiment": "node experiments/run.js",
+    "sweep": "node experiments/run.js --sweep"
+  },
+  "license": "SEE LICENSE IN LICENSE.md",
+  "repository": { "type": "git", "url": "git+https://github.com/corbet-labs/cfrm.git" }
+}
