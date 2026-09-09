@@ -1,13 +1,9 @@
 name: Real admission rendezvous
+# Routine checks run through Crow using .ci/ccid.toml (rendezvous).
+# Keep the complete hosted job as an explicit fallback.
 on:
-  push:
-    branches: [main]
-    paths:
-      - src/rendezvous.js
-      - test/rendezvous.test.js
-      - .github/workflows/rendezvous.yml
-  pull_request:
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:

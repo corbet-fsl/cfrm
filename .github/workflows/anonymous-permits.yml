@@ -1,15 +1,9 @@
 name: Anonymous permit experiments
+# Routine checks run through Crow using .ci/ccid.toml (anonymous-permits).
+# Keep the complete hosted job as an explicit fallback.
 on:
-  push:
-    branches: [main]
-    paths:
-      - experiments/anonymous-permits/**
-      - .github/workflows/anonymous-permits.yml
-  pull_request:
-    paths:
-      - experiments/anonymous-permits/**
-      - .github/workflows/anonymous-permits.yml
   workflow_dispatch:
+
 permissions:
   contents: read
 jobs:
