@@ -1,0 +1,12 @@
+schema = 1
+project = "cfrm"
+
+# Full cryptographic/composition tests keep existing Crow workflows with independently pinned component sources.
+
+[checks.rendezvous]
+kind = "commands"
+commands = [["node", "--test", "test/rendezvous.test.js"]]
+
+[checks.anonymous-permits]
+kind = "commands"
+commands = [["npm", "ci", "--prefix", "experiments/anonymous-permits", "--ignore-scripts", "--no-audit", "--no-fund"], ["npm", "test", "--prefix", "experiments/anonymous-permits"]]
