@@ -2,13 +2,15 @@
 //! No profile content, messages, recipient IDs or relationship map belong here.
 
 pub mod admission;
-pub mod board;
 #[cfg(feature = "sqlite")]
 pub mod allocation;
-#[cfg(feature = "permits")]
-pub mod permits;
+pub mod board;
+#[cfg(all(feature = "browser", target_arch = "wasm32"))]
+pub mod browser;
 #[cfg(all(feature = "permit-issuer", not(target_arch = "wasm32")))]
 pub mod permit_issuer;
+#[cfg(feature = "permits")]
+pub mod permits;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {

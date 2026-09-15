@@ -7,11 +7,15 @@ repository = "https://github.com/corbet-labs/cfrm"
 license-file = "LICENSE.md"
 publish = false
 
+[lib]
+crate-type = ["rlib", "cdylib"]
+
 [features]
 default = []
 sqlite = ["dep:rusqlite"]
 permits = ["dep:blind-rsa-signatures", "dep:getrandom", "dep:zeroize"]
 permit-issuer = ["permits", "sqlite", "dep:openssl"]
+browser = ["permits", "dep:wasm-bindgen", "dep:js-sys", "dep:chacha20poly1305"]
 
 [dependencies]
 data-encoding = "2.9"
@@ -24,6 +28,11 @@ rusqlite = { version = "0.40", features = ["bundled"], optional = true }
 blind-rsa-signatures = { version = "0.17.2", default-features = false, optional = true }
 getrandom = { version = "0.4", optional = true }
 zeroize = { version = "1.8", optional = true }
+chacha20poly1305 = { version = "0.10.1", default-features = false, features = ["alloc"], optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys = { version = "0.3", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 openssl = { version = "0.10", optional = true }
@@ -33,3 +42,7 @@ getrandom = { version = "0.4", features = ["wasm_js"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+
+[[example]]
+name = "browser_fixture"
+required-features = ["permit-issuer"]

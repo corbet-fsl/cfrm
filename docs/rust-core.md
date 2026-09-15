@@ -69,6 +69,9 @@ the 384-byte blinded message. The existing allocation signature covers every
 envelope byte. Save `export_private()` in encrypted local storage before issuing;
 `restore_private()` permits finalization after a client restart or lost reply.
 Finalization verifies the issuer's response before producing a permit.
+Issuance retries still require a currently valid grant/device authorization and
+the original unexpired request. An expired attempt is not automatically refunded
+or signed again; hosts must choose a suitable retry window and retain checkpoints.
 
 Each `PermitEpoch` fixes community, epoch ID, RSA public key, redemption public
 key and common validity/issuance/expiry times. These descriptors must come from
@@ -109,6 +112,12 @@ or charge an unanswered receiver. Recipient binding prevents a spent permit
 being accepted for another opening; it does not make the original credit
 nontransferable. A malicious recipient can consume a ticket without answering.
 No refund or reciprocity reward is inferred from the redemption stamp.
+
+That supply limit assumes an authority honestly enforcing its ledger. An
+authority holding the signing keys can mint extra permits or stamps; recipients
+do not receive a public proof that every signature had a corresponding debit.
+The current accounting is operator-enforced. Hiding honest members' contact
+pairs does not make the permit supply independently auditable.
 
 ### Cryptographic provider boundary
 

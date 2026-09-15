@@ -7,6 +7,9 @@ variables:
   ARTIFACT_ROOT: {default: ""}
   CARGO_TARGET_DIR: {default: ""}
   RESOLVE_DEPENDENCIES: {default: "0"}
+  CHECK_SUITE: {default: "core"}
+  BROWSER_BIN: {default: ""}
+  WASM_LINKER: {default: ""}
   OPENSSL_INCLUDE_DIR: {default: ""}
   OPENSSL_LIB_DIR: {default: ""}
 steps:
