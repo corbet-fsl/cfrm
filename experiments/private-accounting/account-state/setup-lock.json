@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "numPoints": 655360,
+  "files": [
+    {
+      "name": "g1.dat",
+      "url": "https://crs.aztec-cdn.foundation/g1_compressed.dat",
+      "bytes": 20971520,
+      "range": true,
+      "sha256": "d63d757884d1d4e65ce5937e3c50b9e79f357eba09c7e4f2afa10b2f06d30908"
+    },
+    {
+      "name": "g2.dat",
+      "url": "https://crs.aztec-cdn.foundation/g2.dat",
+      "bytes": 128,
+      "range": false,
+      "sha256": "01797bfc4de5a96f0e516a9ea4537d18786dc30cb991aca4274c95822b69c32f"
+    }
+  ]
+}

@@ -1,0 +1,8 @@
+[package]
+name = "cfrm_peer_reservation_foundation"
+type = "bin"
+authors = ["cfrm"]
+compiler_version = "=1.0.0-beta.26"
+
+[dependencies]
+p2hash = { git = "https://github.com/noir-lang/poseidon", tag = "f249446e6e01f7b607ad35351cebe0cc20068cb7" }

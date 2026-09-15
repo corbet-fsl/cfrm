@@ -67,7 +67,7 @@ timeout 1200 cargo test --locked --all-features --all-targets -- --test-threads=
 timeout 1200 cargo check --locked --target wasm32-unknown-unknown --no-default-features --features permits --lib || result=$?
 timeout 120 node --test test/*.test.js || result=$?
 cargo fmt --all
-tar --create --file "$artifact_dir/formatted-source.tar" src/*.rs tests/*.rs tests/common/mod.rs examples/*.rs
+tar --create --file "$artifact_dir/formatted-source.tar" src/*.rs src/accounting_ledger/*.rs tests/*.rs tests/accounting_ledger/*.rs tests/common/mod.rs examples/*.rs
 (cd "$artifact_dir" && sha256sum Cargo.lock formatted-source.tar > SHA256SUMS)
 printf 'Validation status: %s\n' "$result"
 exit "$result"

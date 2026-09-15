@@ -1,0 +1,10 @@
+[package]
+name = "private_accounting_spike"
+type = "bin"
+authors = ["cfrm"]
+compiler_version = "=1.0.0-beta.26"
+
+[dependencies]
+# noir_wasm's GitHub resolver calls its exact-ref field `tag`; it ignores `rev`.
+# A distinct alias avoids beta.26 treating sha256/sha256.nr as a sibling module.
+sha2lib = { git = "https://github.com/noir-lang/sha256", tag = "9442e5b6856f98b2ec029882d7e90199ecff91ba" }

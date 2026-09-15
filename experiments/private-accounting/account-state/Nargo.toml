@@ -1,0 +1,9 @@
+[package]
+name = "cfrm_account_state_foundation"
+type = "bin"
+authors = ["cfrm"]
+compiler_version = "=1.0.0-beta.26"
+
+[dependencies]
+sha2lib = { git = "https://github.com/noir-lang/sha256", tag = "9442e5b6856f98b2ec029882d7e90199ecff91ba" }
+p2hash = { git = "https://github.com/noir-lang/poseidon", tag = "f249446e6e01f7b607ad35351cebe0cc20068cb7" }

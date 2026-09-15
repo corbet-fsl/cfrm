@@ -46,3 +46,7 @@ tempfile = "3"
 [[example]]
 name = "browser_fixture"
 required-features = ["permit-issuer"]
+
+[[example]]
+name = "account_ledger_fixture"
+required-features = ["sqlite"]

@@ -1,10 +1,12 @@
-# Experimental rule policy
+# Historical simulator rule policy
 
-All values here are explicit experiment parameters. They are not settled community rules.
+All values here are explicit historical simulator parameters. The selected
+experimental account-state rules are in [reciprocity-policy.md](reciprocity-policy.md);
+the values below are not its defaults.
 
-This simulator is omniscient. Its directional sent/received and delivery counts are not available to the current private protocol. The [private-accounting study](../studies/private-accounting-contract.md) maps the proven observations and proposes a separately named candidate for review; it does not claim these rules are already implemented privately.
+This simulator is omniscient. Its directional sent/received and delivery counts are not the private v2 accounting relation. The [private-accounting study](../studies/private-accounting-contract.md) maps the simulator's observations and proposed a separate candidate; it does not claim the rules below are implemented privately.
 
-The [directional blind-receipt study](../studies/directional-blind-receipts.md) separately investigates counters of mutually authorized acknowledgements, including receipt pooling and the original guarantees still unproven. Neither candidate is selected or implemented.
+The [directional blind-receipt study](../studies/directional-blind-receipts.md) separately investigates counters of mutually authorized acknowledgements, including receipt pooling and the original guarantees still unproven. Neither historical candidate became the selected [private account ledger](account-ledger.md).
 
 | Parameter | Default | Meaning |
 |---|---:|---|

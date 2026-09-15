@@ -143,25 +143,31 @@ requirements, randomness requirements and private-operation side channels.
 The surrounding application protocol and its composition with cmsg have not
 received an independent cryptographic audit.
 
-## Answer or close forever
+## Experimental reciprocal accounting
 
-cmsg owns permanent member-pair closure and signed private resolution receipts.
-Private answer/close accounting must prove that the correct member fulfilled
-the obligation without exposing the pair or permitting borrowed/poolable
-receipts. The old blind receipt experiment does not establish that binding.
+cmsg owns member-controlled pair restrictions and signed private resolution
+receipts. The experimental [private account ledger](account-ledger.md) proves
+owner/obligation binding without disclosing the pair, and private Active
+presentations gate cmsg application release. The old blind receipt experiment
+does not establish that binding.
 
 Both sending without a resolution and receiving without answering or closing
-must drain the same member budget under the final policy. The aggregate bearer
-gate above does not implement that two-sided obligation ledger. No formula,
-deadline or reward amount is selected here.
+consume the same member capacity under the [v2 policy](reciprocity-policy.md).
+Answer refunds both reservations on their respective accepted evidence;
+recipient Close refunds the recipient while the sender waits until the original
+deadline. Outgoing expiry returns that reservation once without a peer receipt,
+and refill is bounded by shared capacity
+and its authenticated frontier. The aggregate bearer gate above remains separate.
+All amounts and durations require explicit configuration.
 
-Consequently `resolve_private` returns `UnsupportedCapability` for every input.
+The older allocation API's `resolve_private` still returns `UnsupportedCapability` for every input.
 It cannot mint credits from an asserted answer, close flag, encrypted counter
-or copied receipt. This is an explicit missing capability, not a completed
-reciprocity implementation. Initial/periodic allocation tests do not establish
+or copied receipt. That closed endpoint is not the experimental account ledger.
+Initial/periodic allocation tests do not establish
 the unanswered-receive rule, permanent pair accounting or resistance to collusive
-credit farming. A nontransferable private proof backend and its adversarial
-composition remain necessary.
+credit farming. The separate [account-state evidence](account-ledger.md) records
+actual proofs and adversarial composition; it is not production activation or
+an independent cryptographic audit.
 
 ## Verification
 
