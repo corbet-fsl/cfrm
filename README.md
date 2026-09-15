@@ -2,7 +2,9 @@
 
 Ephemeral community rendezvous and numerical participation rules, with deterministic abuse simulations.
 
-This repository contains a real certified onion rendezvous library and experimental numerical rules. It composes with [cvld](https://github.com/corbet-labs/cvld) for eligibility and [cmsg](https://github.com/corbet-labs/cmsg) for private text messaging. No reports or adjudication are part of its model. It is not a complete deployed community service.
+The [Rust core](docs/rust-core.md) provides a member-authenticated multi-device meeting board and a durable introduction-allocation ledger. Every board device requires a member-owned root signature in addition to external eligibility. Full snapshots retain the signed rows for independent verification. The optional SQLite ledger shares one allowance across devices and process restarts. Private answer/close accounting remains explicitly unsupported pending a member-bound proof backend.
+
+The earlier certified onion rendezvous library and numerical experiments remain available separately. cfrm composes with externally operated eligibility verification and [cmsg](https://github.com/corbet-labs/cmsg) for private text messaging. No reports or adjudication are part of its model. It is not a complete deployed community service.
 
 Run on Node 24 with no dependencies:
 
