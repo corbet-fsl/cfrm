@@ -253,7 +253,7 @@ const server = createServer(async (request, response) => {
     response.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
     response.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
     response.setHeader('Cache-Control', 'no-store');
-    response.setHeader('Content-Security-Policy', "default-src 'none'; connect-src 'self'; worker-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; object-src 'none'");
+    response.setHeader('Content-Security-Policy', "default-src 'none'; connect-src 'self' blob:; worker-src 'self' blob:; script-src 'self' 'wasm-unsafe-eval'; object-src 'none'");
     const pathname = new URL(request.url, 'http://localhost').pathname;
     if (pathname === '/test-config.json' && accountingMode === 'account-state-v2') {
       if (request.method !== 'GET') { response.writeHead(405).end(); return; }
@@ -353,7 +353,12 @@ try {
       const { requestId, request } = message.params;
       if (request.url.startsWith(origin + '/') || request.url.startsWith('blob:' + origin + '/')) command('Fetch.continueRequest', { requestId }).catch(() => {});
       else { evidence.forbiddenRequests.push(request.url); command('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' }).catch(() => {}); }
-    } else if (message.method === 'Runtime.exceptionThrown') evidence.browserErrors.push(message.params.exceptionDetails.text);
+    } else if (message.method === 'Runtime.exceptionThrown' && evidence.browserErrors.length < 16) {
+      const details = message.params.exceptionDetails;
+      // CDP's text is commonly just "Uncaught". Preserve the bounded exception
+      // description/stack so module startup failures can actually be diagnosed.
+      evidence.browserErrors.push(String(details.exception?.description ?? details.text).slice(0, 8192));
+    }
   });
   await command('Runtime.enable'); await command('Page.enable');
   await command('Page.setLifecycleEventsEnabled', { enabled: true });
@@ -363,7 +368,13 @@ try {
     await new Promise(resolve => setTimeout(resolve, 100));
   }
   if (!loaded.has(navigation.loaderId)) throw new Error('Browser navigation deadline');
-  const running = command('Runtime.evaluate', { expression: '(async () => { while (!window.accountingDone) await new Promise(r => setTimeout(r, 100)); return await window.accountingDone; })()', awaitPromise: true, returnByValue: true });
+  // The entry module installs this promise synchronously before page load.
+  // A missing promise means startup failed, not that proof generation is slow.
+  const startup = await command('Runtime.evaluate', { expression: 'Boolean(window.accountingDone && typeof window.accountingDone.then === "function")', returnByValue: true });
+  if (startup.exceptionDetails || startup.result?.value !== true) {
+    throw new Error('Browser application did not initialize: ' + (evidence.browserErrors[0] ?? 'no accountingDone promise'));
+  }
+  const running = command('Runtime.evaluate', { expression: 'window.accountingDone', awaitPromise: true, returnByValue: true });
   const runLimit = accountingMode === 'account-state-v2' ? 900_000 : 480_000;
   const result = await Promise.race([running, new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Bounded browser proof/ledger deadline')), runLimit); })]);
   clearTimeout(deadline);

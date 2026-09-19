@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          repository: corbet-labs/cvld
+          repository: cmtymeet/cvld
           ref: c416d9edd6f7f7259d84b88838b8e607b2166671
           path: .dependencies/cvld
           persist-credentials: false
@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          repository: corbet-labs/cmsg
+          repository: cmtymeet/cmsg
           ref: 10118eede82dd6d2353bd1366aad9f744c03b4d8
           path: .dependencies/cmsg
           persist-credentials: false

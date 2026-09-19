@@ -2,7 +2,7 @@
 
 **Counter-backed statements and bounded native release composition are tested; no policy selection.** The current
 [22-case experiment](README.md) establishes the two raw directional counter
-operations. The [cmsg release proposal](https://github.com/corbet-labs/cmsg/blob/main/studies/first-contact-release-gate.md)
+operations. The [cmsg release proposal](https://github.com/cmtymeet/cmsg/blob/main/studies/first-contact-release-gate.md)
 adds a conditional sender-side gate. Actual counter commits must connect to that
 gate's signed statements; synthetic signatures alone do not establish this
 connection. The initial
@@ -41,7 +41,7 @@ sender's particular blind signing interaction, that a text was delivered, or
 that the participants sincerely conversed. A policy controller must keep the
 existing counter names and their precise meanings.
 
-The cmsg [canonical structures](https://github.com/corbet-labs/cmsg/blob/main/experiments/first-contact-release/src/lib.rs)
+The cmsg [canonical structures](https://github.com/cmtymeet/cmsg/blob/main/experiments/first-contact-release/src/lib.rs)
 at source `760948f` define these JSON shapes:
 
 ```text

@@ -3,9 +3,8 @@ name = "cfrm"
 version = "0.1.0-alpha.1"
 edition = "2021"
 description = "Portable authenticated meeting board and operator introduction allocations"
-repository = "https://github.com/corbet-labs/cfrm"
+repository = "https://github.com/cmtymeet/cfrm"
 license-file = "LICENSE.md"
-publish = false
 
 [lib]
 crate-type = ["rlib", "cdylib"]
@@ -16,6 +15,8 @@ sqlite = ["dep:rusqlite"]
 permits = ["dep:blind-rsa-signatures", "dep:getrandom", "dep:zeroize"]
 permit-issuer = ["permits", "sqlite", "dep:openssl"]
 browser = ["permits", "dep:wasm-bindgen", "dep:js-sys", "dep:chacha20poly1305"]
+discovery-api = ["dep:axum", "dep:tokio"]
+discovery-valkey = ["sqlite", "dep:redis", "dep:r2d2", "dep:rustls"]
 
 [dependencies]
 data-encoding = "2.9"
@@ -36,12 +37,18 @@ js-sys = { version = "0.3", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 openssl = { version = "0.10", optional = true }
+axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "json", "tokio"] }
+tokio = { version = "1", optional = true, features = ["rt-multi-thread", "sync", "time", "net", "macros"] }
+redis = { version = "1.7", optional = true, default-features = false, features = ["script", "tls-rustls", "tls-rustls-webpki-roots"] }
+r2d2 = { version = "0.8", optional = true }
+rustls = { version = "0.23", optional = true, default-features = false, features = ["std", "ring", "tls12"] }
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 getrandom = { version = "0.4", features = ["wasm_js"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"
+tower = { version = "0.5", features = ["util"] }
 
 [[example]]
 name = "browser_fixture"

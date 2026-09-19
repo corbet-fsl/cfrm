@@ -54,7 +54,7 @@ impl PermitIssuer {
         })
     }
 
-    fn blind_sign(&self, blinded: &[u8]) -> Result<Vec<u8>, Error> {
+    pub(crate) fn blind_sign(&self, blinded: &[u8]) -> Result<Vec<u8>, Error> {
         let modulus = self
             .key
             .rsa()
@@ -102,6 +102,11 @@ impl PermitIssuer {
         request: &AllocationRequest,
         clock: impl Fn() -> u64,
     ) -> Result<IssuanceResponse, Error> {
+        // Resource tickets never debit the introduction ledger. Their dedicated
+        // namespace is accepted only by the separate quota issuer.
+        if self.epoch.epoch_id.starts_with("cfrm.key-access.v1/") {
+            return Err(Error::PolicyMismatch);
+        }
         let context = self.epoch.context_id()?;
         if request.community_id != self.epoch.community_id
             || request.issued_at < self.epoch.valid_from
@@ -151,6 +156,32 @@ pub struct PermitRedeemer {
 }
 
 impl PermitRedeemer {
+    /// Forget expired opaque spent-token records while retaining configuration
+    /// and the clock floor, so reopening cannot revive an expired epoch.
+    pub fn prune_expired(&mut self, now: u64) -> Result<(), Error> {
+        if now < self.epoch.expires_at || now > MAX_INTEGER {
+            return Err(Error::Expired);
+        }
+        let tx = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        let floor = stored_integer(tx.query_row(
+            "SELECT clock_floor FROM cfrm_redemption_config WHERE singleton=1",
+            [],
+            |row| row.get(0),
+        )?)?;
+        if now < floor {
+            return Err(Error::ClockRollback);
+        }
+        tx.execute("DELETE FROM cfrm_redemptions", [])?;
+        tx.execute(
+            "UPDATE cfrm_redemption_config SET clock_floor=?1 WHERE singleton=1",
+            [sql_integer(now)?],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
     pub fn open(
         path: impl AsRef<Path>,
         epoch: &PermitEpoch,

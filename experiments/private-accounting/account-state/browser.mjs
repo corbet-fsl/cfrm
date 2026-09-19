@@ -1,3 +1,4 @@
+import { proveAccountCandidate, createAccountProver } from '../../../runtime/accounting/runtime.mjs';
 import { Noir } from '@noir-lang/noir_js';
 import { UltraHonkBackend, UltraHonkVerifierBackend } from '@aztec/bb.js';
 import { OPTIONS, hex, unhex, random, sha, canonicalSignature, be, memberBytes } from '../common.mjs';
@@ -14,7 +15,7 @@ const highS = signature => {
 const uint = bytes => BigInt('0x' + hex(bytes));
 const equal = (a, b) => hex(a) === hex(b);
 
-export async function runAccountState({ api, circuit, manifest, verificationKey, post, bytes, metrics, assert, stage }) {
+export async function runAccountState({ api, circuit, manifest, verificationKey, post, bytes, metrics, assert, stage, releaseBackend }) {
   metrics.accountingMode = ACCOUNT_MODE;
   const configuration = await (await fetch('/test-config.json')).json();
   if (!['answer','close'].includes(configuration.accountScenario)) throw new Error('Explicit synthetic scenario required');
@@ -85,13 +86,12 @@ export async function runAccountState({ api, circuit, manifest, verificationKey,
   const backend = new UltraHonkBackend(circuit.bytecode, api), verifier = new UltraHonkVerifierBackend(api);
   async function prove(candidate, ownerIndex, label) {
     stage(label);
-    const executionStart = performance.now();
-    const executed = await noir.execute(noirInput(candidate.input));
-    const witnessMs = performance.now() - executionStart, started = performance.now();
-    const proof = await backend.generateProof(executed.witness, OPTIONS);
-    const provingMs = performance.now() - started, verifyingAt = performance.now();
-    assert(await verifier.verifyProof({ ...proof, verificationKey }, OPTIONS), label);
-    const verificationMs = performance.now() - verifyingAt;
+    const generated = await proveAccountCandidate({ noir, backend, verifier, verificationKey, candidate,
+      scope: { circuitDigest: Array.from(unhex(manifest.circuitSha256)), verifyingKeyDigest: Array.from(unhex(manifest.vkSha256)) },
+      maxProofBytes: 1024 * 1024 });
+    const proof = { proof: unhex(generated.record.proof), publicInputs: generated.publicInputs };
+    const { witnessMs, provingMs, verificationMs } = generated;
+    assert(generated.record.proof.length > 0, label); // Shared production prover verified the generated proof.
     const expected = publicInputValues(candidate.statement);
     assert(proof.publicInputs.length === PUBLIC_INPUT_COUNT && expected.length === PUBLIC_INPUT_COUNT
       && proof.publicInputs.every((value, index) => BigInt(value) === expected[index]), 'exact v2 public encoding without private action/role/outcome');
@@ -534,6 +534,39 @@ export async function runAccountState({ api, circuit, manifest, verificationKey,
   });
   // Real proofs form the only exported account chain; openings, map witnesses,
   // signing secrets and contact receipts stay in this browser test process.
+  // Exercise the complete shipped browser factory after releasing the first
+  // backend. Reprove a page-local genesis candidate, without submitting a second
+  // genesis or transmitting its private witness. Keep this separate from the
+  // chronological accepted account chain.
+  await releaseBackend();
+  stage('production-runtime-factory');
+  const manifestBytes=await bytes('/manifest.json'), manifestSha256=hex(await sha(manifestBytes));
+  const originalFetch=globalThis.fetch;
+  let wasmNetworkFetches=0,wasmBlobFetches=0,runtime;
+  globalThis.fetch=async function(input,init){
+    const url=new URL(input instanceof Request?input.url:String(input),location.href);
+    if(url.protocol==='blob:'&&url.hash.endsWith('/barretenberg-threads.wasm'))wasmBlobFetches++;
+    if(url.protocol!=='blob:'&&url.pathname.endsWith('/barretenberg-threads.wasm')){
+      wasmNetworkFetches++;
+      // A TOCTOU regression must fail with a corrupted second download, not
+      // accidentally pass because this fixture's asset server is immutable.
+      if(wasmNetworkFetches>1)return new Response(new Uint8Array([255]),{status:200});
+    }
+    return originalFetch.call(globalThis,input,init);
+  };
+  try {
+    runtime=await createAccountProver({manifestBytes,manifestSha256,
+      readArtifact:async(name,maximum)=>{const data=await bytes('/'+name);if(data.length>maximum)throw new Error('Factory artifact bound');return data;},
+      limits:{maxProofBytes:20000}});
+  } finally {globalThis.fetch=originalFetch;}
+  try {
+    assert(wasmNetworkFetches===1&&wasmBlobFetches===1,'production factory compiles the verified immutable Wasm without a second network fetch');
+    const started=performance.now(),record=await runtime.prove(genesis[0]);
+    assert(record.statement.nextVersion===0 && record.proof.length>0,'production browser factory proves the retained private genesis witness');
+    assert((await runtime.verify(record)).verified===true,'production browser factory verifies its generated public proof');
+    metrics.runtimeFactory={record,manifestSha256,elapsedMs:performance.now()-started,wasmNetworkFetches,wasmBlobFetches,
+      privateWitnessExported:false,ledgerSubmitted:false};
+  } finally {await runtime.destroy();}
   metrics.endJsHeapBytes = performance.memory?.usedJSHeapSize ?? null;
   metrics.memoryMeasurement = 'Local JS heap at end; exact peak WASM unknown; harness process samples are separate';
   metrics.manifest = manifest;

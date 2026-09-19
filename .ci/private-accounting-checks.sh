@@ -77,6 +77,8 @@ capture() {
   exit "$result"
 }
 trap capture EXIT
+timeout 600 npm ci --prefix ../../runtime/accounting --ignore-scripts --no-audit --no-fund \
+  2>&1 | tee "$artifact_dir/runtime-npm-install.log"
 if test "${RESOLVE_DEPENDENCIES:-0}" = 1; then
   timeout 600 npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
     2>&1 | tee "$artifact_dir/npm-resolution.log"
@@ -187,6 +189,17 @@ export BROWSER_BIN
 test -x "$ACCOUNTING_FIXTURE"
 sha256sum "$ACCOUNTING_FIXTURE" > "$artifact_dir/native-fixture.sha256"
 if test "$ACCOUNTING_MODE" = account-state-v2; then
+  export CFRM_RUNTIME_PROOF_CONFIG="$artifact_dir/runtime-verifier-config.json"
+  node --input-type=module <<'JS'
+import {readFile,writeFile} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {resolve} from 'node:path';
+const directory=resolve('public');
+const manifest=await readFile(resolve(directory,'manifest.json'));
+await writeFile(process.env.CFRM_RUNTIME_PROOF_CONFIG,JSON.stringify({directory,
+  manifestSha256:createHash('sha256').update(manifest).digest('hex'),
+  limits:{maxProofBytes:20000,memoryPages:32768}},null,2)+'\n');
+JS
   case "${ACCOUNT_SCENARIOS:-answer close}" in
     'answer close'|answer|close) ;;
     *) printf 'Unknown account scenarios\n'; exit 2 ;;
@@ -197,6 +210,9 @@ if test "$ACCOUNTING_MODE" = account-state-v2; then
     mkdir -p "$ACCOUNTING_ARTIFACT_DIR"
     export BROWSER_EVIDENCE="$ACCOUNTING_ARTIFACT_DIR/browser-evidence.json"
     timeout --kill-after=15 1200 npm test 2>&1 | tee "$ACCOUNTING_ARTIFACT_DIR/browser-harness.log"
+    timeout --kill-after=15 600 node ../../runtime/accounting/real-proof-check.mjs \
+      "$CFRM_RUNTIME_PROOF_CONFIG" "$BROWSER_EVIDENCE" \
+      2>&1 | tee "$ACCOUNTING_ARTIFACT_DIR/runtime-verifier-evidence.log"
   done
 else
   export BROWSER_EVIDENCE="$artifact_dir/browser-evidence.json"

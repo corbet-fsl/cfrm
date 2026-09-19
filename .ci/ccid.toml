@@ -7,6 +7,10 @@ project = "cfrm"
 kind = "commands"
 commands = [["node", "--test", "test/rendezvous.test.js"]]
 
+[checks.product-services]
+kind = "commands"
+commands = [["bash", ".ci/product-services.sh"]]
+
 [checks.anonymous-permits]
 kind = "commands"
 commands = [["npm", "ci", "--prefix", "experiments/anonymous-permits", "--ignore-scripts", "--no-audit", "--no-fund"], ["npm", "test", "--prefix", "experiments/anonymous-permits"]]

@@ -60,7 +60,7 @@ jobs:
           revision="$(sed -n 's/^revision = "\([0-9a-f]\{40\}\)"$/\1/p' .ci/archives.toml)"
           [[ "$revision" =~ ^[0-9a-f]{40}$ ]]
           git init "$RUNNER_TEMP/cmsg-source"
-          git -C "$RUNNER_TEMP/cmsg-source" fetch --depth 1 https://github.com/corbet-labs/cmsg.git "$revision"
+          git -C "$RUNNER_TEMP/cmsg-source" fetch --depth 1 https://github.com/cmtymeet/cmsg.git "$revision"
           test "$(git -C "$RUNNER_TEMP/cmsg-source" rev-parse FETCH_HEAD)" = "$revision"
           git -C "$RUNNER_TEMP/cmsg-source" archive "$revision" > "$RUNNER_TEMP/cmsg-source.tar"
           printf 'CMSG_SOURCE_ARCHIVE=%s\n' "$RUNNER_TEMP/cmsg-source.tar" >> "$GITHUB_ENV"

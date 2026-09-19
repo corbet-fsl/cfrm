@@ -6,7 +6,10 @@
   "type": "module",
   "exports": {
     "./rendezvous": "./src/rendezvous.js",
-    "./experiments": "./src/simulate.js"
+    "./experiments": "./src/simulate.js",
+    "./profiles": "./browser/profiles/index.js",
+    "./accounting": "./runtime/accounting/index.mjs",
+    "./accounting/node-verifier": "./runtime/accounting/node-verifier.mjs"
   },
   "engines": { "node": ">=24" },
   "scripts": {
@@ -15,5 +18,5 @@
     "sweep": "node experiments/run.js --sweep"
   },
   "license": "SEE LICENSE IN LICENSE.md",
-  "repository": { "type": "git", "url": "git+https://github.com/corbet-labs/cfrm.git" }
+  "repository": { "type": "git", "url": "git+https://github.com/cmtymeet/cfrm.git" }
 }

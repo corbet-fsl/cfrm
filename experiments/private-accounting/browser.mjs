@@ -36,10 +36,12 @@ async function main() {
     // The pinned browser loader inserts '-threads' when shared memory is
     // available, resolving this base path to /barretenberg-threads.wasm.
     wasmPath: '/barretenberg.wasm', memory: { initial: 2048, maximum: 32768 } });
+  let released=false;
+  const releaseBackend=async()=>{if(!released){released=true;await api.destroy();}};
   try {
   if (manifest.accountingMode === 'account-state-v2') {
     const { runAccountState } = await import('./account-state/browser.mjs');
-    return await runAccountState({ api, circuit, manifest, verificationKey, post, bytes, metrics, assert, stage });
+    return await runAccountState({ api, circuit, manifest, verificationKey, post, bytes, metrics, assert, stage, releaseBackend });
   }
   const hashScheme = checkScheme(manifest.hashScheme);
   metrics.hashScheme = hashScheme;
@@ -208,6 +210,6 @@ async function main() {
     metrics.downloadBytes = performance.getEntriesByType('resource').reduce((n, r) => n + r.encodedBodySize, 0);
     metrics.manifest = manifest;
     return { ok: true, ...metrics };
-  } finally { await api.destroy(); }
+  } finally { await releaseBackend(); }
 }
 window.accountingDone = main().catch(error => ({ ok: false, ...metrics, error: String(error?.stack ?? error) }));
