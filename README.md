@@ -2,6 +2,11 @@
 
 Ephemeral community rendezvous and numerical participation rules, with deterministic abuse simulations.
 
+All product frontend code belongs in [cmeet](https://github.com/cmtymeet/cmeet).
+cfrm, cvld and cmsg provide reusable backend logic. cfrm's browser/Wasm modules
+perform local verification, cryptography and protocol operations; pages,
+components, styling, navigation and application flows remain in cmeet.
+
 The [Rust core](docs/rust-core.md) provides a member-authenticated multi-device meeting board and a durable introduction-allocation ledger. Every board device requires a member-owned root signature in addition to external eligibility. Full snapshots retain the signed rows for independent verification. The optional SQLite ledger shares one allowance across devices and process restarts. RFC9474 blind permits gate first introductions through atomic anonymous redemption. The [browser bindings](browser/README.md) perform local roster verification and permit preparation, recovery and stamp verification in Rust/Wasm. The older allocation ledger's `resolve_private` entry point remains closed.
 
 The earlier certified onion rendezvous library and numerical experiments remain available separately. cfrm composes with externally operated eligibility verification and [cmsg](https://github.com/cmtymeet/cmsg) for private information transport. Eligibility policy and numerical disapproval are separate integration concerns. This repository does not provide a complete deployed community service.

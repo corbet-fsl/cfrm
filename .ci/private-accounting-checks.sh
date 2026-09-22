@@ -105,6 +105,16 @@ if test "${CHECK_PHASE:-full}" = startup; then
   exit "$startup_result"
 fi
 export BROWSER_CHECK_PHASE=proof
+if test "${CHECK_PHASE:-full}" = full; then
+  available_kib="$(awk '/^MemAvailable:/ { print $2 }' /proc/meminfo)"
+  printf 'Available memory before proof work: %s KiB\n' "$available_kib"
+  cat /proc/pressure/memory
+  df -h "$artifact_dir"
+  if test "$available_kib" -lt 8388608; then
+    printf 'Proof validation requires at least 8 GiB available memory\n'
+    exit 1
+  fi
+fi
 timeout 600 npm ci --prefix ../../runtime/accounting --ignore-scripts --no-audit --no-fund \
   2>&1 | tee "$artifact_dir/runtime-npm-install.log"
 if test "${RESOLVE_DEPENDENCIES:-0}" = 1; then
@@ -215,12 +225,12 @@ if test "$ACCOUNTING_MODE" = account-state-v2; then
   export ACCOUNTING_LEDGER_FIXTURE="$CARGO_TARGET_DIR/release/examples/account_ledger_fixture"
   test -x "$ACCOUNTING_LEDGER_FIXTURE"
   sha256sum "$ACCOUNTING_LEDGER_FIXTURE" > "$artifact_dir/ledger-fixture.sha256"
-  cargo fmt --manifest-path ../../Cargo.toml
+  cargo fmt --manifest-path ../../Cargo.toml -- --check
   tar --create --file "$artifact_dir/formatted-ledger-source.tar" --directory ../.. src/accounting.rs src/accounting_policy.rs src/accounting_ledger.rs src/accounting_ledger/tuning.rs examples/account_ledger_fixture.rs
 else
   timeout 1200 cargo build --locked --manifest-path native/Cargo.toml --release \
     2>&1 | tee "$artifact_dir/native-build.log"
-  cargo fmt --manifest-path native/Cargo.toml
+  cargo fmt --manifest-path native/Cargo.toml -- --check
   tar --create --file "$artifact_dir/formatted-native-source.tar" native/src
   export ACCOUNTING_FIXTURE="$CARGO_TARGET_DIR/release/cfrm-private-accounting-fixture"
 fi

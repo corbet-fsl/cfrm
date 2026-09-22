@@ -26,7 +26,8 @@ jobs:
   experiment:
     # Hosted Actions is primary; the matching Crow workflow is its fallback.
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    # Two bounded proof scenarios plus cold builds and shipped-verifier checks.
+    timeout-minutes: 90
     env:
       CARGO_BUILD_JOBS: '2'
       RUST_TEST_THREADS: '2'
