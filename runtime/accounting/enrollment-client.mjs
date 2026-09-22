@@ -137,5 +137,29 @@ export function createEnrollmentClient(options = {}) {
       if (!response || response.action !== 'current' || !response.publication) return null;
       return verifyAndBuild(response.publication, undefined, now());
     },
+    async historical({ slot, at, expectedRoot }) {
+      const currentTime = now();
+      if (!Number.isSafeInteger(slot) || slot < 0 || !integer(at) || at > currentTime
+          || Math.floor(at / checkpointPeriodSeconds) !== slot
+          || (expectedRoot !== undefined && (!(expectedRoot instanceof Uint8Array) || expectedRoot.length !== 32))) {
+        throw new TypeError('Explicit historical checkpoint required');
+      }
+      const pinnedRoot = expectedRoot === undefined ? undefined : Array.from(expectedRoot);
+      let response;
+      try { response = await transport({ action: 'checkpoint', slot }); }
+      catch { throw new Error('Historical enrollment unavailable'); }
+      if (!response || Object.keys(response).length !== 3
+          || !['action', 'slot', 'publication'].every(key => Object.hasOwn(response, key)) || response.action !== 'checkpoint'
+          || response.slot !== slot || !response.publication) throw new Error('Historical enrollment unavailable');
+      // Historical time is allowed only on this distinct API. It cannot replace
+      // acquire/current eligibility or move the client's current clock back.
+      const verified = await verifyAndBuild(response.publication, undefined, at);
+      if (verified.publication.slot !== slot || (pinnedRoot !== undefined && !equal(verified.publication.root, pinnedRoot))) {
+        throw new Error('Historical enrollment root mismatch');
+      }
+      const { notBefore, expiresAt } = verified.publication, root = verified.publication.root.slice();
+      return Object.freeze({ ...verified, status: 'historical',
+        acceptanceCheckpoint: { slot, notBefore, expiresAt, root } });
+    },
   });
 }

@@ -20,6 +20,41 @@ const decode = value => {
   if (bytes.length !== 32) throw new Error('Account actor identity'); return bytes;
 };
 
+// Internal context boundary, exported here for focused contract tests. This
+// does not authenticate a checkpoint: the embedding must obtain it from an
+// independently verified common publication (e.g. EnrollmentClient.historical).
+// Current membership and acceptance-time membership are separate trusted pins.
+export function accountActorPeerContext(context, currentRoot, acceptance) {
+  const trusted = structuredClone(context);
+  const keys = ['now', 'expected', 'accountPolicy', 'enrollmentRoot', 'authorityExpiresAt'];
+  const historical = Object.hasOwn(trusted ?? {}, 'acceptanceCheckpoint');
+  if (!exact(trusted, historical ? [...keys, 'acceptanceCheckpoint'] : keys)
+      || !Number.isSafeInteger(trusted.now) || trusted.now <= 0
+      || !Number.isSafeInteger(trusted.authorityExpiresAt) || trusted.authorityExpiresAt <= trusted.now
+      || !equal(trusted.enrollmentRoot, Array.from(currentRoot))) {
+    throw new Error('Independently verified current peer authority context required');
+  }
+  if (historical) {
+    const checkpoint = trusted.acceptanceCheckpoint, statement = acceptance?.statement;
+    if (!exact(checkpoint, ['slot', 'notBefore', 'expiresAt', 'root'])
+        || !Number.isSafeInteger(checkpoint.slot) || checkpoint.slot < 0
+        || !Number.isSafeInteger(checkpoint.notBefore) || checkpoint.notBefore < 0
+        || !Number.isSafeInteger(checkpoint.expiresAt) || checkpoint.expiresAt <= checkpoint.notBefore
+        || checkpoint.notBefore !== checkpoint.slot * (checkpoint.expiresAt - checkpoint.notBefore)
+        || !Array.isArray(checkpoint.root) || checkpoint.root.length !== 32
+        || checkpoint.root.some(value => !Number.isInteger(value) || value < 0 || value > 255)
+        || !statement || !Number.isSafeInteger(statement.now) || statement.now <= 0 || !Number.isSafeInteger(acceptance.acceptedAt)
+        || statement.now < checkpoint.notBefore || statement.now >= checkpoint.expiresAt
+        || acceptance.acceptedAt < statement.now || acceptance.acceptedAt >= checkpoint.expiresAt
+        || acceptance.acceptedAt > trusted.now || !equal(checkpoint.root, statement.enrollmentRoot)) {
+      throw new Error('Independently verified acceptance checkpoint required');
+    }
+    trusted.enrollmentRoot = checkpoint.root;
+    delete trusted.acceptanceCheckpoint;
+  }
+  return trusted;
+}
+
 /** One serialized holder-side account, backed by encrypted local CAS storage.
  * All enrollment/authority/policy inputs come from independently verified host
  * configuration. Peer evidence and private event handles never enter transport. */
@@ -254,7 +289,8 @@ export async function createAccountActor(options) {
       return exclusive(async () => {
         await current(expiresAt);
         if (!state) throw new Error('Account actor requires accepted state');
-        return runtime.provePeer({ state, event: selected, accountAcceptance: journal.accepted.acceptance, context: trusted });
+        return runtime.provePeer({ state, event: selected, accountAcceptance: journal.accepted.acceptance,
+          context: accountActorPeerContext(trusted, root, journal.accepted.acceptance) });
       });
     },
     verifyPeer: (record, context, { own, expiresAt }) => {
@@ -262,16 +298,14 @@ export async function createAccountActor(options) {
       return exclusive(async () => {
         available();
         if (typeof own !== 'boolean') throw new Error('Explicit peer verification role required');
-        if (!exact(trusted, ['now', 'expected', 'accountPolicy', 'enrollmentRoot', 'authorityExpiresAt'])
-            || !Number.isSafeInteger(trusted.authorityExpiresAt) || trusted.authorityExpiresAt <= trusted.now
-            || !equal(trusted.enrollmentRoot, Array.from(root))) throw new Error('Independently verified peer authority context required');
+        const verifiedContext = accountActorPeerContext(trusted, root, presentation.accountAcceptance);
         if (own) {
           await current(expiresAt);
           if (!state || presentation.statement.stateVersion !== Number(state.version)
               || hex(Uint8Array.from(presentation.statement.stateCommitment)) !== state.commitment.toString(16).padStart(64, '0')
               || !equal(presentation.statement.owner, Array.from(owner))) throw new Error('Peer presentation is not current own state');
         }
-        const verified = await runtime.verifyPeer(presentation, trusted);
+        const verified = await runtime.verifyPeer(presentation, verifiedContext);
         const validUntil = Math.min(trusted.accountPolicy.policyValidUntil,
           trusted.expected.expiresAt, trusted.authorityExpiresAt);
         if (now() >= validUntil) throw new Error('Peer release authority expired during verification');

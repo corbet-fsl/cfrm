@@ -106,6 +106,43 @@ the actual signatures. After refreshing context without a new accepted state,
 persist its checkpoint with the old acceptance and the separately authenticated
 current root. Wallet atomicity and root distribution remain application-owned.
 
+For peer presentations, the acceptance's common checkpoint may precede the
+current roster. `enrollmentService.checkpoint(slot)` returns only the exact
+already-installed signed publication, or `null` if unavailable. Expose this as
+an authenticated, read-only lookup by common slot, with no peer identifier or
+proof in the request. It never recreates past membership from today's registry.
+Both stores bound retained history by slot count and total publication bytes;
+configure both for supported live leases. Missing history must fail closed.
+
+After verifying the operator acceptance, call
+`enrollmentClient.historical({ slot, at: acceptance.statement.now,
+expectedRoot: Uint8Array.from(acceptance.statement.enrollmentRoot) })`, where
+`slot` is derived using the configured checkpoint period. It authenticates the
+publication signature, historical delegation validity and recomputed root, and
+returns `{ status: 'historical', publication, checkpoint, entries,
+acceptanceCheckpoint: { slot, notBefore, expiresAt, root } }`.
+This result grants no current eligibility. Current acquisition still rejects
+stale publications; an application may retain authenticated results in a
+bounded cache while their reservations remain live.
+
+For an original reservation authority, a separate lookup may use its original
+`openedAt` and slot without `expectedRoot`. The pinned operator signature and
+full root reconstruction still authenticate that exact common publication;
+the returned root never comes from the peer. Require `expectedRoot` when looking
+up an acceptance certificate. An original authority must still match the current
+member's immutable account-key and secret-commitment binding before use.
+
+The actor's peer context may include that `acceptanceCheckpoint` alongside its
+existing fields. `enrollmentRoot` still pins the **current** verified roster;
+the optional checkpoint separately pins the certificate's original common
+root and must contain both its proof and acceptance times. The actor's own
+current signed status/version/commitment checks remain mandatory. The embedding
+must still verify current membership and cmsg device authority, immutable
+account-key/secret-commitment continuity, original slot authorities and the
+absolute release deadline. Never manufacture the checkpoint from a peer's
+certificate or pass historical membership as the current roster. Without the
+optional field, actor contexts retain the original same-root-only behavior.
+
 `AccountClient` receives `transport(envelope)`, `sign(bytes)` and the pinned
 operator public key. `prepareApply` converts a public proof record to the exact
 device-signed Rust request. **Persist that request together with the old and

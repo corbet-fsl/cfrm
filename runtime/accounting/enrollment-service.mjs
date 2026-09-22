@@ -186,6 +186,25 @@ export function createEnrollmentService(options = {}) {
       return Object.freeze({ checkpoint, entries: clone(entries) });
     },
     async publishCheckpoint() { return publishAt(await currentTime()); },
+    async checkpoint(slot) {
+      const now = await currentTime();
+      if (!Number.isSafeInteger(slot) || slot < 0 || slot > Math.floor(now / checkpointPeriodSeconds)) {
+        throw new TypeError('Invalid historical enrollment slot');
+      }
+      // Only an exact publication already installed as a common ledger root is
+      // history. Never rebuild an old slot from today's registry or install it
+      // on demand. Retention limits may make this lookup unavailable.
+      const retained = await store.pending(communityId, slot);
+      if (!retained?.installed) return null;
+      const publication = publicationShape(retained.publication);
+      const start = slot * checkpointPeriodSeconds, end = (slot + 1) * checkpointPeriodSeconds;
+      if (!Number.isSafeInteger(end) || publication.slot !== slot
+          || publication.communityId !== communityId || publication.policyDigest !== policyDigest
+          || publication.notBefore !== start || publication.expiresAt !== end) {
+        throw new Error('Historical enrollment publication mismatch');
+      }
+      return clone(publication);
+    },
     async current() {
       // This also creates the current slot on a fresh server. If there is no
       // delegation valid through the slot end, publishAt reports the explicit
