@@ -20,6 +20,14 @@ on:
         description: Explicit fourteen-field AccountPolicy JSON, required for account-state-v2
         type: string
         default: ''
+      account_scenarios:
+        description: Account-state scenarios to validate
+        type: choice
+        default: 'answer close'
+        options:
+          - 'answer close'
+          - answer
+          - close
 permissions:
   contents: read
 jobs:
@@ -38,6 +46,7 @@ jobs:
       HASH_SCHEME: ${{ inputs.hash_scheme }}
       ACCOUNTING_MODE: ${{ inputs.accounting_mode }}
       ACCOUNT_POLICY_JSON: ${{ inputs.account_policy_json }}
+      ACCOUNT_SCENARIOS: ${{ inputs.account_scenarios }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:

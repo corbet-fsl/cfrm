@@ -19,6 +19,9 @@ if (startupOnly && (!process.env.BROWSER_DIST || !/^[0-9a-f]{40}$/.test(process.
 const hashScheme = startupOnly ? null : checkScheme(process.env.HASH_SCHEME ?? SHA_SCHEME);
 const accountingMode = startupOnly ? null : process.env.ACCOUNTING_MODE ?? 'settlement-v1';
 const accountScenario = process.env.ACCOUNT_SCENARIO;
+// Account-state Close includes twelve sequential proofs and the shipped factory.
+// Keep its browser work bounded with room beyond the measured fifteen minutes.
+const browserProofDeadlineMs = accountingMode === 'account-state-v2' ? 1_200_000 : 480_000;
 if (!startupOnly) {
   if (!['settlement-v1','account-state-v2'].includes(accountingMode)
       || (accountingMode === 'account-state-v2' && !['answer','close'].includes(accountScenario))) throw new Error('Explicit accounting mode/scenario required');
@@ -43,7 +46,7 @@ function captureClose(child) { closed.set(child, new Promise(resolve => child.on
 // Read only our Chromium PID and descendants discovered through its thread
 // children files. Never enumerate /proc globally or retain process contents.
 function sampleBrowserMemory(child) {
-  const intervalMs = 200, sampleDeadlineMs = 750, maximumDurationMs = accountingMode === 'account-state-v2' ? 900_000 : 600_000;
+  const intervalMs = 200, sampleDeadlineMs = 750, maximumDurationMs = Math.max(browserProofDeadlineMs, 600_000);
   const maximumProcesses = 128, maximumThreads = 256, maximumReads = 2048;
   const began = performance.now();
   const report = {
@@ -410,8 +413,7 @@ try {
     }
   } else {
   const running = command('Runtime.evaluate', { expression: 'window.accountingDone', awaitPromise: true, returnByValue: true });
-  const runLimit = accountingMode === 'account-state-v2' ? 900_000 : 480_000;
-  const result = await Promise.race([running, new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Bounded browser proof/ledger deadline')), runLimit); })]);
+  const result = await Promise.race([running, new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Bounded browser proof/ledger deadline')), browserProofDeadlineMs); })]);
   clearTimeout(deadline);
   if (result.exceptionDetails || !result.result?.value) throw new Error('No browser result');
   evidence.contract = result.result.value;

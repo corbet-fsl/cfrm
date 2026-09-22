@@ -48,17 +48,19 @@ if test "$suite" = browser; then
   if test "$native_ready" = 1 && test "$bindings_ready" = 1; then
     export BROWSER_BIN BROWSER_EVIDENCE="$artifact_dir/browser-evidence.json"
     export BROWSER_FIXTURE="$CARGO_TARGET_DIR/debug/examples/browser_fixture"
-    timeout 300 node .ci/browser-check.mjs 2>&1 | tee "$artifact_dir/browser-harness.log" || result=$?
+    timeout --kill-after=15 480 node .ci/browser-package.mjs "$artifact_dir/npm" \
+      2>&1 | tee "$artifact_dir/browser-harness.log" || result=$?
   fi
   # Preserve generated glue and diagnostics even when initialization/tests fail.
-  tar --create --file "$artifact_dir/browser-package.tar" browser/contract.mjs browser/README.md .ci/browser-check.mjs examples/browser_fixture.rs
+  tar --create --file "$artifact_dir/browser-package.tar" browser/contract.mjs browser/README.md browser/CONSUMER.md \
+    browser/package.json .ci/browser-check.mjs .ci/browser-package.mjs examples/browser_fixture.rs
   if test -d browser/pkg; then
     tar --append --file "$artifact_dir/browser-package.tar" browser/pkg
   fi
   printf '%s\n' "$result" > "$artifact_dir/validation-status.txt"
   (
     cd "$artifact_dir"
-    find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+    find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
   )
   printf 'Browser validation status: %s\n' "$result"
   exit "$result"

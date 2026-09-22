@@ -1,0 +1,21 @@
+{
+  "name": "cfrm-browser",
+  "version": "0.1.0-alpha.0",
+  "private": true,
+  "description": "Rust/Wasm roster verification and blind-permit bindings for cfrm",
+  "type": "module",
+  "license": "SEE LICENSE IN LICENSE.md",
+  "exports": {
+    ".": { "types": "./pkg/cfrm.d.ts", "import": "./pkg/cfrm.js" },
+    "./wasm": "./pkg/cfrm_bg.wasm"
+  },
+  "files": [
+    "pkg/cfrm.js",
+    "pkg/cfrm.d.ts",
+    "pkg/cfrm_bg.wasm",
+    "pkg/cfrm_bg.wasm.d.ts",
+    "README.md",
+    "LICENSE.md"
+  ],
+  "repository": { "type": "git", "url": "git+https://github.com/cmtymeet/cfrm.git", "directory": "browser" }
+}

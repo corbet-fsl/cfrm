@@ -47,6 +47,8 @@ case "${CHECK_PHASE:-full}" in
     test "$ACCOUNTING_MODE" = account-state-v2
     test -n "${REUSE_ARTIFACT_DIR:-}"
     [[ "${REUSE_ARTIFACT_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] || exit 2
+    [[ "${BROWSER_BUNDLE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || exit 2
+    case "${ACCOUNT_SCENARIOS:-}" in answer|close) ;; *) printf 'One explicit replay scenario required\n'; exit 2 ;; esac
     artifact_dir="$artifact_dir-ledger"
     ;;
   profile)
@@ -186,13 +188,14 @@ if test "${CHECK_PHASE:-full}" = ledger; then
   printf '%s  %s\n' "$REUSE_ARTIFACT_SHA256" "$REUSE_ARTIFACT_DIR/SHA256SUMS" | sha256sum --check --strict
   (cd "$REUSE_ARTIFACT_DIR"; sha256sum --check --strict SHA256SUMS > "$artifact_dir/reuse-validation.log")
   cmp package-lock.json "$REUSE_ARTIFACT_DIR/package-lock.json"
+  cmp ../../runtime/accounting/package-lock.json "$REUSE_ARTIFACT_DIR/runtime-package-lock.json"
   mkdir replay-package
   tar --extract --file "$REUSE_ARTIFACT_DIR/browser-package.tar" --directory replay-package --no-same-owner
   cp -R replay-package/dist public
   timeout 1200 cargo build --locked --manifest-path ../../Cargo.toml --no-default-features --features sqlite \
     --release --example account_ledger_fixture 2>&1 | tee "$artifact_dir/ledger-fixture-build.log"
   export ACCOUNTING_LEDGER_FIXTURE="$CARGO_TARGET_DIR/release/examples/account_ledger_fixture"
-  export ACCOUNTING_ARTIFACT_DIR="$artifact_dir" REUSE_ARTIFACT_DIR REUSE_ARTIFACT_SHA256
+  export ACCOUNTING_ARTIFACT_DIR="$artifact_dir" REUSE_ARTIFACT_DIR REUSE_ARTIFACT_SHA256 BROWSER_BUNDLE_SHA ACCOUNT_SCENARIOS
   sha256sum "$ACCOUNTING_LEDGER_FIXTURE" > "$artifact_dir/ledger-fixture.sha256"
   timeout --kill-after=15 1200 node account-state/replay-ledger.mjs 2>&1 | tee "$artifact_dir/ledger-replay.log"
   exit 0
@@ -260,7 +263,9 @@ JS
     export ACCOUNTING_ARTIFACT_DIR="$artifact_dir/$scenario"
     mkdir -p "$ACCOUNTING_ARTIFACT_DIR"
     export BROWSER_EVIDENCE="$ACCOUNTING_ARTIFACT_DIR/browser-evidence.json"
-    timeout --kill-after=15 1200 npm test 2>&1 | tee "$ACCOUNTING_ARTIFACT_DIR/browser-harness.log"
+    # Includes the 1200s browser bound, then independent Rust ledger verification
+    # and child cleanup after Chromium has stopped.
+    timeout --kill-after=15 1800 npm test 2>&1 | tee "$ACCOUNTING_ARTIFACT_DIR/browser-harness.log"
     timeout --kill-after=15 600 node ../../runtime/accounting/real-proof-check.mjs \
       "$CFRM_RUNTIME_PROOF_CONFIG" "$BROWSER_EVIDENCE" \
       2>&1 | tee "$ACCOUNTING_ARTIFACT_DIR/runtime-verifier-evidence.log"

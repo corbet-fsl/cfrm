@@ -3,15 +3,21 @@
 import { createServer } from 'node:http';
 import { readFile, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { once } from 'node:events';
 import { tmpdir } from 'node:os';
-import { resolve, join, extname, sep } from 'node:path';
+import { resolve, join, extname, isAbsolute, sep } from 'node:path';
 
 const root = resolve(process.cwd());
 const artifact = process.env.BROWSER_EVIDENCE;
 const binary = process.env.BROWSER_BIN;
 const fixtureBinary = process.env.BROWSER_FIXTURE;
 if (!binary || !artifact || !fixtureBinary) throw new Error('BROWSER_BIN, BROWSER_EVIDENCE and BROWSER_FIXTURE are required');
+if (process.env.BROWSER_RUNTIME_ROOT && !isAbsolute(process.env.BROWSER_RUNTIME_ROOT)) {
+  throw new Error('BROWSER_RUNTIME_ROOT must be an explicit absolute asset directory');
+}
+const runtimeRoot = process.env.BROWSER_RUNTIME_ROOT ?? join(root, 'browser/pkg');
+const runtimeAssets = { source: process.env.BROWSER_RUNTIME_ROOT ? 'override' : 'repository', files: {} };
 const mime = { '.mjs': 'text/javascript', '.js': 'text/javascript', '.wasm': 'application/wasm' };
 const MAX_BODY = 16 * 1024;
 const fixtureQueue = [];
@@ -103,11 +109,17 @@ const server = createServer(async (request, response) => {
       response.end('<!doctype html><meta charset="utf-8"><title>cfrm browser contract</title>');
       return;
     }
-    const file = resolve(root, '.' + decodeURIComponent(pathname));
-    if (!file.startsWith(join(root, 'browser') + sep) || !mime[extname(file)]) {
+    const decoded = decodeURIComponent(pathname);
+    const runtimeName = decoded.startsWith('/browser/pkg/') ? decoded.slice('/browser/pkg/'.length) : undefined;
+    if (runtimeName !== undefined && !['cfrm.js', 'cfrm_bg.wasm'].includes(runtimeName)) {
+      response.writeHead(404).end(); return;
+    }
+    const file = runtimeName === undefined ? resolve(root, '.' + decoded) : join(runtimeRoot, runtimeName);
+    if ((runtimeName === undefined && !file.startsWith(join(root, 'browser') + sep)) || !mime[extname(file)]) {
       response.writeHead(404).end(); return;
     }
     const bytes = await readFile(file);
+    if (runtimeName !== undefined) runtimeAssets.files[runtimeName] = createHash('sha256').update(bytes).digest('hex');
     response.writeHead(200, { 'Content-Type': mime[extname(file)], 'Cache-Control': 'no-store' });
     response.end(bytes);
   } catch { if (!response.headersSent) response.writeHead(500); response.end(); }
@@ -236,12 +248,12 @@ try {
   if (fixtureFailure) throw fixtureFailure;
   if (forbiddenRequests.length) throw new Error(`Unexpected external requests: ${JSON.stringify(forbiddenRequests)}`);
   const evidence = { source: process.env.CI_COMMIT_SHA, browser: metadata.Browser,
-    runtime: process.version, contract: result.result.value, fixture: fixtureStats, unexpectedExternalRequests: forbiddenRequests };
+    runtime: process.version, runtimeAssets, contract: result.result.value, fixture: fixtureStats, unexpectedExternalRequests: forbiddenRequests };
   await writeFile(artifact, JSON.stringify(evidence, null, 2) + '\n');
   process.stdout.write(JSON.stringify(evidence) + '\n');
 } catch (error) {
   await writeFile(artifact, JSON.stringify({ source: process.env.CI_COMMIT_SHA,
-    browser: browserVersion, runtime: process.version, ok: false,
+    browser: browserVersion, runtime: process.version, runtimeAssets, ok: false,
     error: String(error), fixture: fixtureStats, fixtureError: fixtureFailure?.message,
     unexpectedExternalRequests: forbiddenRequests,
   }, null, 2) + '\n');
