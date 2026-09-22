@@ -33,7 +33,6 @@ jobs:
       CI_COMMIT_SHA: ${{ github.sha }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
       CMSG_CARGO_TARGET_DIR: ${{ github.workspace }}/target-cmsg
-      ARTIFACT_ROOT: ${{ runner.temp }}/accounting-evidence
       RESOLVE_DEPENDENCIES: '0'
       HASH_SCHEME: ${{ inputs.hash_scheme }}
       ACCOUNTING_MODE: ${{ inputs.accounting_mode }}
@@ -66,6 +65,8 @@ jobs:
           printf 'CMSG_SOURCE_ARCHIVE=%s\n' "$RUNNER_TEMP/cmsg-source.tar" >> "$GITHUB_ENV"
           printf 'CMSG_SOURCE_SHA256=%s\n' "$(sha256sum "$RUNNER_TEMP/cmsg-source.tar" | cut -d ' ' -f 1)" >> "$GITHUB_ENV"
       - name: Run the shared experiment
+        env:
+          ARTIFACT_ROOT: ${{ runner.temp }}/accounting-evidence
         run: bash .ci/private-accounting-checks.sh
       - name: Retain exact setup and proof evidence
         if: always()

@@ -2,6 +2,11 @@ name: Product service contracts
 on:
   workflow_dispatch:
     inputs:
+      suite:
+        description: Select the affected service contracts
+        type: choice
+        default: all
+        options: [all, javascript]
       resolve_dependencies:
         type: boolean
         default: false
@@ -16,8 +21,8 @@ jobs:
       RUST_TEST_THREADS: '2'
       CI_COMMIT_SHA: ${{ github.sha }}
       CARGO_TARGET_DIR: ${{ github.workspace }}/target
-      ARTIFACT_ROOT: ${{ runner.temp }}/contract-evidence
       RESOLVE_DEPENDENCIES: ${{ inputs.resolve_dependencies && '1' || '0' }}
+      PRODUCT_SUITE: ${{ inputs.suite }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -26,11 +31,14 @@ jobs:
         with:
           node-version: '24'
       - name: Prepare Rust targets
+        if: inputs.suite == 'all'
         run: |
           rustup update stable --no-self-update
           rustup default stable
           rustup target add wasm32-unknown-unknown
       - run: bash .ci/product-services.sh
+        env:
+          ARTIFACT_ROOT: ${{ runner.temp }}/contract-evidence
       - name: Preserve exact lockfile and evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

@@ -3,26 +3,44 @@ set -euo pipefail
 rustc --version
 cargo --version
 node --version
-artifact_dir="${ARTIFACT_ROOT:?}/${CI_COMMIT_SHA:?}/product-services"
+case "${PRODUCT_SUITE:-all}" in
+  all|javascript) ;;
+  *) printf 'Unknown product service suite\n'; exit 2 ;;
+esac
+artifact_dir="${ARTIFACT_ROOT:?}/${CI_COMMIT_SHA:?}/product-services-${PRODUCT_SUITE:-all}"
 mkdir -p "$artifact_dir"
 capture() {
   local status=$?
   trap - EXIT
   set +e
   test ! -f Cargo.lock || cp Cargo.lock "$artifact_dir/Cargo.lock"
-  cargo fmt --all
-  tar -cf "$artifact_dir/formatted-source.tar" src/*.rs src/accounting_ledger/*.rs tests/*.rs tests/common/*.rs tests/accounting_ledger/*.rs examples/*.rs
+  if test "${PRODUCT_SUITE:-all}" = all; then
+    cargo fmt --all -- --check > "$artifact_dir/format.log" 2>&1
+    format_status=$?
+    if test "$status" = 0; then status=$format_status; fi
+  fi
   printf '%s\n' "$status" > "$artifact_dir/validation-status.txt"
-  (cd "$artifact_dir" && find . -maxdepth 1 -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
+  (cd "$artifact_dir" && find . -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS)
   exit "$status"
 }
 trap capture EXIT
+accounting_contracts() {
+  if timeout 600 npm ci --prefix runtime/accounting --ignore-scripts --no-audit --no-fund; then
+    timeout 180 node --test runtime/accounting/test/*.test.mjs 2>&1 | tee "$artifact_dir/accounting-js.log" || result=$?
+  else result=$?; fi
+  timeout --kill-after=15 900 node .ci/package-consumer.mjs "$artifact_dir/package-consumer" \
+    2>&1 | tee "$artifact_dir/package-consumer.log" || result=$?
+}
+result=0
+if test "${PRODUCT_SUITE:-all}" = javascript; then
+  accounting_contracts
+  exit "$result"
+fi
 if test "${RESOLVE_DEPENDENCIES:-0}" = 1; then
   cargo generate-lockfile
   date -u +%FT%TZ > "$artifact_dir/dependency-resolution-time.txt"
 fi
 cp Cargo.lock "$artifact_dir/Cargo.lock"
-result=0
 export CFRM_REQUIRE_VALKEY=1
 VALKEY_TEST_ROOT="$artifact_dir/valkey-tools"
 export VALKEY_TEST_ROOT
@@ -50,7 +68,5 @@ fi
 export BROWSER_BIN
 PROFILE_BROWSER_EVIDENCE="$artifact_dir/profile-browser.json" timeout --kill-after=15 180 node browser/profiles/run-browser.mjs \
   2>&1 | tee "$artifact_dir/profile-browser.log" || result=$?
-if timeout 600 npm ci --prefix runtime/accounting --ignore-scripts --no-audit --no-fund; then
-  timeout 180 node --test runtime/accounting/test/*.test.mjs 2>&1 | tee "$artifact_dir/accounting-js.log" || result=$?
-else result=$?; fi
+accounting_contracts
 exit "$result"

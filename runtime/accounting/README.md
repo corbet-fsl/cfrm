@@ -43,6 +43,69 @@ is required, and terminate that Worker on cancellation. `destroy` releases the
 backend after the current operation. It intentionally does not pretend an
 abandoned Promise interrupts cryptographic work.
 
+Persist an account witness with `witness.exportCheckpoint(checkpointLimits)`.
+It returns UTF-8 JSON bytes containing private openings, map leaves and slots;
+encrypt these bytes in the member wallet before storage. The exact resource
+limits are required: `{ maxBytes, maxMapEntries, maxSlots }`, with positive
+integers bounded respectively by 16 MiB, 65,536 entries per map (including its
+sentinel), and 65,535 slots. These are engineering hard caps for parser/work
+resources; the library supplies no product defaults.
+The checkpoint excludes the owner secret, runtime functions and proof artifacts.
+Preserve the owner secret separately in the same private wallet boundary.
+
+```js
+const restored = await AccountWitness.restoreCheckpoint({
+  checkpointBytes,          // decrypted local-wallet bytes
+  hashes: runtime.hashes,   // the trusted pinned runtime
+  enrollment,              // independently verified checkpointFromVerified result
+  ownerSecret,             // private wallet bytes; never server input
+  expectedStatement,       // independently verified acceptance's statement
+  limits: checkpointLimits,
+});
+```
+
+Restoration validates the exact versioned schema and bounds, reconstructs ordered
+maps at their original leaf positions, verifies the current owner membership path
+and saved historical authority headers, recomputes slot markers/payloads and the
+account commitment, and binds the result to the expected owner, community,
+policy, version and time. By default, the enrollment root is pinned by the
+expected statement. To restore old saved bytes with a newer verified roster,
+pass `expectedEnrollmentRoot` from independently authenticated current
+configuration as well. The serialized root must match either that current pin
+or the expected acceptance; the supplied roster must match the current pin.
+No new genesis or state reset occurs. A serialized checkpoint cannot authenticate
+its own expected statement: verify the operator signature and use fresh authenticated
+status to resolve uncertain acceptance/current-state questions. During a pending
+write, its durable exact signed request supplies the successor's expected
+statement; that reconstruction alone does not authorize installing the successor.
+Keep both the old and pending successor checkpoints until acceptance is verified
+and committed atomically. The library does not provide wallet encryption,
+cross-device synchronization, rollback protection or atomic compare-and-swap.
+Hashing remains serialized through the application-owned runtime/Worker.
+
+When membership changes, use
+`await witness.withEnrollment({ enrollment, expectedRoot })` with the independently
+verified `checkpointFromVerified` result and independently admitted common root
+(32 canonical bytes). It returns a new witness with the same permanent owner,
+registered secret, commitment, version, opening and historical obligations.
+Current member indexes may change. New reservations check the selected peer's
+membership path; subsequent proofs use the refreshed owner enrollment and root.
+Supply the intended time explicitly to the next operation, whose proof still
+requires current owner eligibility. A context refresh is not ledger acceptance.
+
+Each slot retains its original owner and peer authority records privately.
+Their committed authority leaves never change when the roster changes. Removed
+peers and completed slots do not prevent restoration, cancellation, outgoing
+expiry, refill or incoming Close. Settlement defaults to the saved original
+receipt/acknowledgment authorities. To use a receipt signed under a renewed
+authority, pass the existing `settle` arguments `peerEnrollment` and/or
+`receiptOwnerEnrollment` explicitly; replacements must match the original leaf
+or prove current membership, and a replacement self authority must be the current
+owner. The circuit independently checks validity at signing/proving times and
+the actual signatures. After refreshing context without a new accepted state,
+persist its checkpoint with the old acceptance and the separately authenticated
+current root. Wallet atomicity and root distribution remain application-owned.
+
 `AccountClient` receives `transport(envelope)`, `sign(bytes)` and the pinned
 operator public key. `prepareApply` converts a public proof record to the exact
 device-signed Rust request. **Persist that request together with the old and

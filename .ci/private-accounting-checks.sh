@@ -24,6 +24,15 @@ case "$ACCOUNTING_MODE" in
 esac
 case "${CHECK_PHASE:-full}" in
   full) ;;
+  startup)
+    test -n "${REUSE_ARTIFACT_DIR:-}"
+    [[ "${REUSE_ARTIFACT_SHA256:-}" =~ ^[0-9a-f]{64}$ ]] || exit 2
+    [[ "${BROWSER_BUNDLE_SHA:-}" =~ ^[0-9a-f]{40}$ ]] || exit 2
+    artifact_dir="$artifact_dir-startup"
+    ;;
+  startup-build)
+    artifact_dir="$artifact_dir-startup-build"
+    ;;
   compile)
     test "$ACCOUNTING_MODE" = account-state-v2
     artifact_dir="$artifact_dir-compile"
@@ -59,6 +68,7 @@ capture() {
   test ! -f setup-lock.json || cp setup-lock.json "$artifact_dir/setup-lock.json"
   test ! -f account-state/setup-lock.json || cp account-state/setup-lock.json "$artifact_dir/account-state-setup-lock.json"
   test ! -f ../../Cargo.lock || cp ../../Cargo.lock "$artifact_dir/cfrm-Cargo.lock"
+  test ! -f ../../runtime/accounting/package-lock.json || cp ../../runtime/accounting/package-lock.json "$artifact_dir/runtime-package-lock.json"
   for name in manifest.json circuit.json circuit-stats.json; do
     test ! -f "public/$name" || cp "public/$name" "$artifact_dir/$name"
   done
@@ -77,6 +87,24 @@ capture() {
   exit "$result"
 }
 trap capture EXIT
+if test "${CHECK_PHASE:-full}" = startup; then
+  # Diagnose the exact retained browser bundle without installing dependencies,
+  # starting native fixtures, loading proof setup, or generating another proof.
+  printf '%s  %s\n' "$REUSE_ARTIFACT_SHA256" "$REUSE_ARTIFACT_DIR/SHA256SUMS" | sha256sum --check --strict
+  (cd "$REUSE_ARTIFACT_DIR"; sha256sum --check --strict SHA256SUMS > "$artifact_dir/reuse-validation.log")
+  cmp package-lock.json "$REUSE_ARTIFACT_DIR/package-lock.json"
+  startup_package="$(mktemp -d "$artifact_dir/startup-package.XXXXXXXX")"
+  tar --extract --file "$REUSE_ARTIFACT_DIR/browser-package.tar" --directory "$startup_package" --no-same-owner
+  export BROWSER_CHECK_PHASE=startup BROWSER_BUNDLE_SHA
+  export BROWSER_DIST="$startup_package/dist" BROWSER_EVIDENCE="$artifact_dir/browser-evidence.json"
+  printf '%s\n' "$BROWSER_BUNDLE_SHA" > "$artifact_dir/browser-bundle-source.txt"
+  printf '%s\n' "$REUSE_ARTIFACT_SHA256" > "$artifact_dir/reused-manifest.sha256"
+  startup_result=0
+  timeout --kill-after=15 120 node browser-check.mjs 2>&1 | tee "$artifact_dir/browser-startup.log" || startup_result=$?
+  rm -rf -- "$startup_package"
+  exit "$startup_result"
+fi
+export BROWSER_CHECK_PHASE=proof
 timeout 600 npm ci --prefix ../../runtime/accounting --ignore-scripts --no-audit --no-fund \
   2>&1 | tee "$artifact_dir/runtime-npm-install.log"
 if test "${RESOLVE_DEPENDENCIES:-0}" = 1; then
@@ -97,6 +125,19 @@ test "$(uname -s)" = Linux
 test "$(uname -m)" = x86_64
 timeout 600 npm ci --libc=glibc --ignore-scripts --no-audit --no-fund \
   2>&1 | tee "$artifact_dir/npm-install.log"
+if test "${CHECK_PHASE:-full}" = startup-build; then
+  # Bundle current imports without compiling circuits or initializing proof setup.
+  export BROWSER_BUILD_DIR="$artifact_dir/browser-bundle"
+  export NAPI_RS_NATIVE_LIBRARY_PATH="$PWD/node_modules/@rolldown/binding-linux-x64-gnu"
+  timeout 300 node --input-type=module <<'JS' 2>&1 | tee "$artifact_dir/browser-build.log"
+const { build } = await import('vite');
+await build({ publicDir: false, build: { outDir: process.env.BROWSER_BUILD_DIR } });
+JS
+  export BROWSER_CHECK_PHASE=startup BROWSER_BUNDLE_SHA="$CI_COMMIT_SHA"
+  export BROWSER_DIST="$BROWSER_BUILD_DIR" BROWSER_EVIDENCE="$artifact_dir/browser-evidence.json"
+  timeout --kill-after=15 120 node browser-check.mjs 2>&1 | tee "$artifact_dir/browser-startup.log"
+  exit 0
+fi
 if test "${CHECK_PHASE:-full}" = compile; then
   export ACCOUNTING_ARTIFACT_DIR="$artifact_dir"
   if test "$CIRCUIT_PACKAGE" = peer-reservation; then

@@ -1,6 +1,8 @@
 import { fieldBytes, fieldValue } from './primitives.mjs';
 import { cat, be, random, zeros } from './encoding.mjs';
 import { IndexedMap, policyDigest, statePolicyDigest, integer, SAFE, POLICY_KEYS } from './hashes.mjs';
+import { exportWitnessCheckpoint, restoreWitnessCheckpoint } from './checkpoint.mjs';
+import { refreshEnrollment, verifyEnrollmentPath, verifyReceiptEnrollment } from './enrollment.mjs';
 
 const POLICY_WIRE = [
   ['initialCredit','initial_credit',32], ['maximumAvailable','maximum_available',32],
@@ -66,9 +68,37 @@ export function statementBytes(statement) {
     ...POLICY_WIRE.map(([key, , bits]) => be(p[key], bits / 8)));
 }
 
+export async function validateStatement(statement) {
+  const keys = ['protocolVersion','community','owner','policyDigest','enrollmentRoot','now','validUntil','genesis',
+    'previousVersion','nextVersion','previousState','nextState','settlementMarker','policy'];
+  const exact = (value, names) => value && !Array.isArray(value) && Object.keys(value).length === names.length
+    && names.every(key => Object.hasOwn(value, key));
+  const equal = (a, b) => a.length === b.length && a.every((value, index) => value === b[index]);
+  if (!exact(statement, keys) || !exact(statement.policy, POLICY_KEYS)) throw new Error('Exact account statement required');
+  const inputs = publicInputValues(statement), s = statement;
+  if (inputs.length !== PUBLIC_INPUT_COUNT || BigInt(s.validUntil) !== validityHorizon(s.now, s.policy)
+      || s.now <= 0 || s.now < s.policy.policyValidFrom || s.now >= s.policy.policyValidUntil
+      || !equal(s.policyDigest, await policyDigest(Uint8Array.from(s.community), s.policy))) throw new Error('Account policy/time encoding');
+  for (const key of ['enrollmentRoot','previousState','nextState','settlementMarker']) fieldValue(Uint8Array.from(s[key]));
+  if (!s.enrollmentRoot.some(Boolean) || !s.nextState.some(Boolean)
+      || (s.genesis ? s.previousVersion !== 0 || s.nextVersion !== 0 || s.previousState.some(Boolean) || s.settlementMarker.some(Boolean)
+        : s.nextVersion !== s.previousVersion + 1 || !s.previousState.some(Boolean))) throw new Error('Account state/version shape');
+  return inputs;
+}
+
 // Local witness state. It is never accepted by an operator without a real proof
 // plus a durable accepted-state comparison. Returned candidates do not mutate it.
 export class AccountWitness {
+  /** Private UTF-8 JSON bytes for the member's encrypted wallet, never a server. */
+  exportCheckpoint(limits) { return exportWitnessCheckpoint(this, limits); }
+
+  /** The embedding independently authenticates expectedStatement and enrollment. */
+  static async restoreCheckpoint(options) {
+    const value = Object.assign(new AccountWitness(), await restoreWitnessCheckpoint(options, validateStatement));
+    value.at(value.now);
+    return value;
+  }
+
   static async genesis({ hashes, community, policy, checkpoint, ownerIndex, ownerSecret, now }) {
     const value = new AccountWitness();
     Object.assign(value, { hashes, community, policy, checkpoint, ownerIndex, ownerSecret, now: BigInt(now), version: 0n });
@@ -99,6 +129,12 @@ export class AccountWitness {
     copy.policyHash = await policyDigest(this.community, policy);
     // This only prepares a witness. The host independently requires its exact
     // current durable policy; a browser cannot authorize its own tuning.
+    return copy;
+  }
+  /** Current independently admitted roster; preserves the accepted private state. */
+  async withEnrollment(options) {
+    const current = await refreshEnrollment(this, options), copy = this.clone();
+    Object.assign(copy, current);
     return copy;
   }
   clone() {
@@ -152,12 +188,15 @@ export class AccountWitness {
     const admissions = this.opening.admissionEpoch === at.epoch ? this.opening.admissions + 1n : 1n;
     if (admissions > at.admissionLimit) throw new Error('Shared admission rate exhausted');
     const peer = this.checkpoint.entries[peerIndex];
+    if (!peer || peer === this.owner) throw new Error('Current peer enrollment required');
+    await verifyEnrollmentPath(peer, this.community, this.checkpoint.root, this.hashes);
     const event = await this.hashes.marker(this.community, this.ownerSecret, this.owner.member, peer.member, nonce);
     const pair = await this.hashes.pairKey(this.community, this.owner.member, this.ownerSecret, peer.member);
     const amount = BigInt(role === 0 ? this.policy.outgoingReservation : this.policy.incomingReservation);
     if (this.opening.available < amount) throw new Error('Insufficient shared available capacity');
-    const slot = { peerIndex, role, peer: peer.member, nonce, group, contactPolicy, amount, phase: 1,
-      admittedAt: opened, expiresAt: expiry, peerAuthority: peer.leaf, ownerAuthority: this.owner.leaf };
+    const slot = { role, peer: peer.member, nonce, group, contactPolicy, amount, phase: 1,
+      admittedAt: opened, expiresAt: expiry, peerAuthority: peer.leaf, ownerAuthority: this.owner.leaf,
+      peerEnrollment: structuredClone(peer), ownerEnrollment: structuredClone(this.owner) };
     const own = role === 0 ? this.outgoing : this.incoming, opposite = role === 0 ? this.incoming : this.outgoing;
     const inserted = await own.insert(event, await this.hashes.obligation(event, slot, 1));
     const input = this.input(random(), now), next = this.clone();
@@ -184,9 +223,17 @@ export class AccountWitness {
     if (action === 3 && oldSlot.role === 0 && Number(resolution?.kind) !== 1) throw new Error('Outgoing Close cannot alter the fixed refund date');
     if (action === 3 && Number(resolution?.kind) === 1 && (expired || !withinHorizon)) throw new Error('Answer arrived after the common lease');
     const slot = structuredClone(oldSlot), next = this.clone(), input = this.input(random(), now);
+    const peer = structuredClone(peerEnrollment ?? slot.peerEnrollment),
+      receiptOwner = structuredClone(receiptOwnerEnrollment ?? slot.ownerEnrollment);
+    if (action === 3) {
+      if (slot.role === 0 || Number(resolution?.kind) === 1) {
+        await verifyReceiptEnrollment(peer, this, slot.peer, slot.peerAuthority);
+      }
+      if (slot.role === 1) await verifyReceiptEnrollment(receiptOwner, this, this.owner.member, slot.ownerAuthority, true);
+    }
     Object.assign(input, { action, slot: slotInput(slot),
-      peer_enrollment: enrollmentInput(peerEnrollment ?? this.checkpoint.entries[slot.peerIndex]) });
-    input.receipt_owner_enrollment = enrollmentInput(receiptOwnerEnrollment ?? this.owner);
+      peer_enrollment: enrollmentInput(peer) });
+    input.receipt_owner_enrollment = enrollmentInput(receiptOwner);
     const phase = action === 2 ? 2 : action === 4 ? 4 : action === 5 ? 5 : 3;
     const changed = await (slot.role === 0 ? this.outgoing : this.incoming).update(event,
       await this.hashes.obligation(event, slot, phase));

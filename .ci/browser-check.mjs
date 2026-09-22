@@ -252,14 +252,14 @@ try {
   clearTimeout(deadline);
   socket?.close();
   if (browser?.pid && browser.exitCode === null && browser.signalCode === null) {
-    const exited = once(browser, 'exit');
+    const exited = once(browser, 'close');
     browser.kill('SIGTERM');
     const force = setTimeout(() => browser.kill('SIGKILL'), 5000);
     await exited;
     clearTimeout(force);
   }
   if (fixture?.pid && fixture.exitCode === null && fixture.signalCode === null) {
-    const exited = once(fixture, 'exit');
+    const exited = once(fixture, 'close');
     fixture.kill('SIGTERM');
     const force = setTimeout(() => fixture.kill('SIGKILL'), 5000);
     await exited;
@@ -267,5 +267,7 @@ try {
   }
   server.closeAllConnections();
   await new Promise(resolve => server.close(resolve));
-  await rm(profile, { recursive: true, force: true });
+  // Chromium can finish a final profile write as its children shut down.
+  // Retry only this owned temporary directory, after process/stdio closure.
+  await rm(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
 }

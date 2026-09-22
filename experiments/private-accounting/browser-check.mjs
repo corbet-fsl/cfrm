@@ -10,18 +10,28 @@ import { checkScheme, SHA_SCHEME, POSEIDON_SCHEME } from './hashes.mjs';
 const binary = process.env.BROWSER_BIN;
 const fixtureBinary = process.env.ACCOUNTING_FIXTURE;
 const evidencePath = process.env.BROWSER_EVIDENCE;
-const hashScheme = checkScheme(process.env.HASH_SCHEME ?? SHA_SCHEME);
-const accountingMode = process.env.ACCOUNTING_MODE ?? 'settlement-v1';
+const checkPhase = process.env.BROWSER_CHECK_PHASE ?? 'proof';
+if (!['proof', 'startup'].includes(checkPhase)) throw new Error('Unsupported browser check phase');
+const startupOnly = checkPhase === 'startup';
+if (startupOnly && (!process.env.BROWSER_DIST || !/^[0-9a-f]{40}$/.test(process.env.BROWSER_BUNDLE_SHA ?? ''))) {
+  throw new Error('Startup check requires BROWSER_DIST and exact BROWSER_BUNDLE_SHA');
+}
+const hashScheme = startupOnly ? null : checkScheme(process.env.HASH_SCHEME ?? SHA_SCHEME);
+const accountingMode = startupOnly ? null : process.env.ACCOUNTING_MODE ?? 'settlement-v1';
 const accountScenario = process.env.ACCOUNT_SCENARIO;
-if (!['settlement-v1','account-state-v2'].includes(accountingMode)
-    || (accountingMode === 'account-state-v2' && !['answer','close'].includes(accountScenario))) throw new Error('Explicit accounting mode/scenario required');
-const localManifest = JSON.parse(await readFile('public/manifest.json', 'utf8'));
-if (localManifest.hashScheme !== hashScheme) throw new Error('Harness hash scheme differs from built circuit');
-if ((localManifest.accountingMode ?? 'settlement-v1') !== accountingMode) throw new Error('Harness accounting mode differs from build');
-if (!binary || !fixtureBinary || !evidencePath) throw new Error('BROWSER_BIN, ACCOUNTING_FIXTURE, BROWSER_EVIDENCE required');
-const root = resolve('dist');
+if (!startupOnly) {
+  if (!['settlement-v1','account-state-v2'].includes(accountingMode)
+      || (accountingMode === 'account-state-v2' && !['answer','close'].includes(accountScenario))) throw new Error('Explicit accounting mode/scenario required');
+  const localManifest = JSON.parse(await readFile('public/manifest.json', 'utf8'));
+  if (localManifest.hashScheme !== hashScheme) throw new Error('Harness hash scheme differs from built circuit');
+  if ((localManifest.accountingMode ?? 'settlement-v1') !== accountingMode) throw new Error('Harness accounting mode differs from build');
+}
+if (!binary || (!startupOnly && !fixtureBinary) || !evidencePath) throw new Error('BROWSER_BIN, BROWSER_EVIDENCE and proof ACCOUNTING_FIXTURE required');
+const root = resolve(startupOnly ? process.env.BROWSER_DIST : 'dist');
 const profile = await mkdtemp(join(tmpdir(), 'cfrm-accounting-'));
 const evidence = { source: process.env.CI_COMMIT_SHA, runtime: process.version, hashScheme, accountingMode, accountScenario, ok: false,
+  checkPhase, ...(startupOnly ? { bundleSource: process.env.BROWSER_BUNDLE_SHA,
+    scope: 'Static browser entry initialization; proof behavior is untested', heldManifestRequests: 0 } : {}),
   fixtureRequests: 0, forbiddenRequests: [], loadedBytes: 0, browserErrors: [] };
 let fixture, browser, socket, origin, fixtureWaiting, fixtureTimer, deadline, browserMemory, ledgerBridge;
 let fixtureOutput = '', fixtureStderr = '', stderr = '', enrolled;
@@ -279,7 +289,12 @@ const server = createServer(async (request, response) => {
 server.requestTimeout = 280_000; server.headersTimeout = 20_000;
 const command = (method, params = {}) => {
   const id = nextId++; const result = new Promise((resolve, reject) => pending.set(id, { resolve, reject }));
-  socket.send(JSON.stringify({ id, method, params })); return result;
+  socket.send(JSON.stringify({ id, method, params }));
+  if (!startupOnly) return result;
+  let timer;
+  return Promise.race([result, new Promise((_, reject) => {
+    timer = setTimeout(() => { pending.delete(id); reject(new Error('Browser startup command deadline: ' + method)); }, 10_000);
+  })]).finally(() => clearTimeout(timer));
 };
 async function stop(child) {
   if (!child) return;
@@ -292,6 +307,8 @@ async function stop(child) {
   finally { clearTimeout(force); clearTimeout(bound); }
 }
 try {
+  server.listen(0, '127.0.0.1'); await once(server, 'listening'); origin = `http://127.0.0.1:${server.address().port}`;
+  if (!startupOnly) {
   let fixtureEnvironment = process.env;
   if (accountingMode === 'account-state-v2') {
     if (!process.env.ACCOUNTING_ARTIFACT_DIR) throw new Error('Owned account artifact directory required');
@@ -303,7 +320,6 @@ try {
       CMSG_PEER_VERIFIER_SCRIPT: ledgerBridge.paths.peerVerifier, CMSG_PEER_VERIFIER_MANIFEST: ledgerBridge.paths.manifest,
       CMSG_PEER_VERIFIER_ENROLLMENT: ledgerBridge.paths.enrollment, CMSG_PEER_VERIFIER_LEDGER: ledgerBridge.paths.ledger };
   }
-  server.listen(0, '127.0.0.1'); await once(server, 'listening'); origin = `http://127.0.0.1:${server.address().port}`;
   fixture = captureClose(spawn(fixtureBinary, accountingMode === 'account-state-v2' ? ['--serve'] : [], { stdio: ['pipe', 'pipe', 'pipe'], env: fixtureEnvironment }));
   fixture.on('error', error => failFixture(error)); fixture.stdin.on('error', error => failFixture(error));
   fixture.stderr.on('data', chunk => { fixtureStderr = (fixtureStderr + chunk).slice(-4096); });
@@ -323,14 +339,17 @@ try {
       clearTimeout(fixtureTimer); const waiting = fixtureWaiting; fixtureWaiting = undefined; waiting.resolve(reply);
     } catch (error) { failFixture(error); }
   });
+  }
   browser = captureClose(spawn(binary, ['--headless', '--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage', '--disable-background-networking',
     '--disable-component-update', '--no-first-run', '--no-default-browser-check', '--disable-extensions',
     '--remote-debugging-address=127.0.0.1', '--remote-debugging-port=0', `--user-data-dir=${profile}`, 'about:blank'],
   { stdio: ['ignore', 'ignore', 'pipe'] }));
   let launchError; browser.on('error', error => { launchError = error; });
   browser.stderr.on('data', chunk => { stderr = (stderr + chunk).slice(-8000); });
-  browserMemory = sampleBrowserMemory(browser);
-  evidence.browserProcessMemory = browserMemory.report;
+  if (!startupOnly) {
+    browserMemory = sampleBrowserMemory(browser);
+    evidence.browserProcessMemory = browserMemory.report;
+  }
   let port;
   for (let attempt = 0; attempt < 300; attempt++) {
     if (launchError) throw launchError;
@@ -339,9 +358,10 @@ try {
     catch { await new Promise(resolve => setTimeout(resolve, 100)); }
   }
   if (!port) throw new Error('Browser startup deadline');
-  evidence.browser = (await (await fetch(`http://127.0.0.1:${port}/json/version`)).json()).Browser;
-  const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`)).json();
-  socket = new WebSocket(pages.find(p => p.type === 'page').webSocketDebuggerUrl); await once(socket, 'open');
+  const startupRequestOptions = () => startupOnly ? { signal: AbortSignal.timeout(5000) } : undefined;
+  evidence.browser = (await (await fetch(`http://127.0.0.1:${port}/json/version`, startupRequestOptions())).json()).Browser;
+  const pages = await (await fetch(`http://127.0.0.1:${port}/json/list`, startupRequestOptions())).json();
+  socket = new WebSocket(pages.find(p => p.type === 'page').webSocketDebuggerUrl); await once(socket, 'open', startupRequestOptions());
   socket.addEventListener('message', event => {
     const message = JSON.parse(event.data);
     if (message.id) {
@@ -351,7 +371,11 @@ try {
       loaded.add(message.params.loaderId);
     } else if (message.method === 'Fetch.requestPaused') {
       const { requestId, request } = message.params;
-      if (request.url.startsWith(origin + '/') || request.url.startsWith('blob:' + origin + '/')) command('Fetch.continueRequest', { requestId }).catch(() => {});
+      if (startupOnly && request.url === origin + '/manifest.json' && request.method === 'GET') {
+        // Hold the first application fetch: the entry can initialize its globals,
+        // but cannot load circuits, start a prover or contact a fixture.
+        evidence.heldManifestRequests += 1;
+      } else if (request.url.startsWith(origin + '/') || request.url.startsWith('blob:' + origin + '/')) command('Fetch.continueRequest', { requestId }).catch(() => {});
       else { evidence.forbiddenRequests.push(request.url); command('Fetch.failRequest', { requestId, errorReason: 'BlockedByClient' }).catch(() => {}); }
     } else if (message.method === 'Runtime.exceptionThrown' && evidence.browserErrors.length < 16) {
       const details = message.params.exceptionDetails;
@@ -374,6 +398,17 @@ try {
   if (startup.exceptionDetails || startup.result?.value !== true) {
     throw new Error('Browser application did not initialize: ' + (evidence.browserErrors[0] ?? 'no accountingDone promise'));
   }
+  if (startupOnly) {
+    for (let attempt = 0; attempt < 20 && !evidence.heldManifestRequests; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    const entry = await command('Runtime.evaluate', { expression: '({ isolated: crossOriginIsolated, progress: window.accountingProgress })', returnByValue: true });
+    evidence.entry = entry.result?.value;
+    if (entry.exceptionDetails || !evidence.entry?.isolated || !evidence.entry.progress
+        || evidence.heldManifestRequests !== 1 || evidence.browserErrors.length || evidence.forbiddenRequests.length) {
+      throw new Error('Browser entry startup contract incomplete');
+    }
+  } else {
   const running = command('Runtime.evaluate', { expression: 'window.accountingDone', awaitPromise: true, returnByValue: true });
   const runLimit = accountingMode === 'account-state-v2' ? 900_000 : 480_000;
   const result = await Promise.race([running, new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Bounded browser proof/ledger deadline')), runLimit); })]);
@@ -392,6 +427,7 @@ try {
     if (evidence.contract.peerReservations?.length !== 2 || evidence.liveLedger.applies !== expectedProofs) throw new Error('Actual peer/ledger bridge contract incomplete');
     const { runRustAccountLedgerContract } = await import('./account-state/ledger-contract.mjs');
     evidence.ledger = await runRustAccountLedgerContract(evidence.contract, enrolled);
+  }
   }
   evidence.ok = true;
 } catch (error) {

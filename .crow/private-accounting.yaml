@@ -10,6 +10,7 @@ variables:
   RESOLVE_DEPENDENCIES: {default: "0"}
   RESOLVE_SETUP: {default: "0"}
   CHECK_PHASE: {default: "full"}
+  BROWSER_BUNDLE_SHA: {default: ""}
   CIRCUIT_PACKAGE: {default: "account-state"}
   REUSE_ARTIFACT_DIR: {default: ""}
   REUSE_ARTIFACT_SHA256: {default: ""}

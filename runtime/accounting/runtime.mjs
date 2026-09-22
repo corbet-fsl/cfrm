@@ -1,27 +1,12 @@
 import { loadArtifacts, withPinnedBrowserWasm } from './artifacts.mjs';
 import { OPTIONS, hex, sha, unhex } from './encoding.mjs';
-import { fieldValue } from './primitives.mjs';
-import { accountHashes, noirInput, policyDigest, POLICY_KEYS } from './hashes.mjs';
-import { publicInputValues, PUBLIC_INPUT_COUNT, validityHorizon, statementFromInput } from './witness.mjs';
+import { accountHashes, noirInput } from './hashes.mjs';
+import { publicInputValues, statementFromInput, validateStatement } from './witness.mjs';
+export { validateStatement } from './witness.mjs';
 
-const statementKeys = ['protocolVersion','community','owner','policyDigest','enrollmentRoot','now','validUntil','genesis',
-  'previousVersion','nextVersion','previousState','nextState','settlementMarker','policy'];
 const exact = (value, keys) => value && !Array.isArray(value) && Object.keys(value).length === keys.length
   && keys.every(key => Object.hasOwn(value, key));
 const equal = (a,b) => a.length === b.length && a.every((v,i) => v === b[i]);
-
-export async function validateStatement(statement) {
-  if (!exact(statement, statementKeys) || !exact(statement.policy, POLICY_KEYS)) throw new Error('Exact account statement required');
-  const inputs = publicInputValues(statement), s = statement;
-  if (inputs.length !== PUBLIC_INPUT_COUNT || BigInt(s.validUntil) !== validityHorizon(s.now, s.policy)
-      || s.now <= 0 || s.now < s.policy.policyValidFrom || s.now >= s.policy.policyValidUntil
-      || !equal(s.policyDigest, await policyDigest(Uint8Array.from(s.community), s.policy))) throw new Error('Account policy/time encoding');
-  for (const key of ['enrollmentRoot','previousState','nextState','settlementMarker']) fieldValue(Uint8Array.from(s[key]));
-  if (!s.enrollmentRoot.some(Boolean) || !s.nextState.some(Boolean)
-      || (s.genesis ? s.previousVersion !== 0 || s.nextVersion !== 0 || s.previousState.some(Boolean) || s.settlementMarker.some(Boolean)
-        : s.nextVersion !== s.previousVersion + 1 || !s.previousState.some(Boolean))) throw new Error('Account state/version shape');
-  return inputs;
-}
 
 // Shared with the real browser composition suite. Backend objects must be created
 // from pinned artifacts; this low-level function does not load or select artifacts.

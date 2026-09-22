@@ -7,6 +7,7 @@ variables:
   ARTIFACT_ROOT: {default: ""}
   CARGO_TARGET_DIR: {default: ""}
   RESOLVE_DEPENDENCIES: {default: "0"}
+  PRODUCT_SUITE: {default: "all"}
   BROWSER_BIN: {default: ""}
   WASM_LINKER: {default: ""}
   OPENSSL_INCLUDE_DIR: {default: ""}
