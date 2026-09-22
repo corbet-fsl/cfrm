@@ -5,6 +5,7 @@ use crate::{
     admission::{decode, digest, AdmissionGrant, DeviceAuthorization, MAX_INTEGER},
     allocation::{sql_integer, stored_integer, AllocationLedger, AllocationRequest, Reservation},
     permits::{PermitEpoch, RedemptionRequest, RedemptionStamp, ISSUANCE_REQUEST_BYTES, RSA_BYTES},
+    storage::Connection,
     Error,
 };
 use data_encoding::BASE64URL_NOPAD;
@@ -14,7 +15,7 @@ use openssl::{
     pkey_ctx::PkeyCtx,
     rsa::{Padding, Rsa},
 };
-use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use rusqlite::{params, OptionalExtension, TransactionBehavior};
 use std::{path::Path, time::Duration};
 
 pub struct PermitIssuer {
@@ -187,13 +188,29 @@ impl PermitRedeemer {
         epoch: &PermitEpoch,
         key: SigningKey,
     ) -> Result<Self, Error> {
+        Self::with_connection(Connection::open(path)?, epoch, key)
+    }
+
+    #[cfg(all(feature = "turso", not(target_arch = "wasm32")))]
+    pub fn open_remote(
+        config: crate::storage::RemoteConfig,
+        epoch: &PermitEpoch,
+        key: SigningKey,
+    ) -> Result<Self, Error> {
+        Self::with_connection(Connection::open_remote(config)?, epoch, key)
+    }
+
+    fn with_connection(
+        mut connection: Connection,
+        epoch: &PermitEpoch,
+        key: SigningKey,
+    ) -> Result<Self, Error> {
         let context = epoch.context_id()?;
         if BASE64URL_NOPAD.encode(&key.verifying_key().to_bytes()) != epoch.redemption_public_key {
             return Err(Error::Admission);
         }
-        let mut connection = Connection::open(path)?;
-        connection.busy_timeout(Duration::from_secs(5))?;
-        connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
+        connection.configure_local(Duration::from_secs(5))?;
+        connection.execute_batch("
             CREATE TABLE IF NOT EXISTS cfrm_redemption_config (singleton INTEGER PRIMARY KEY CHECK(singleton=1), context TEXT NOT NULL, clock_floor INTEGER NOT NULL);
             CREATE TABLE IF NOT EXISTS cfrm_redemptions (token TEXT PRIMARY KEY, claim TEXT NOT NULL, commitment TEXT NOT NULL, stamp BLOB NOT NULL) WITHOUT ROWID;")?;
         let transaction = connection.transaction_with_behavior(TransactionBehavior::Immediate)?;

@@ -172,7 +172,10 @@ test('refresh changes the current roster without resetting state or requiring re
   assert.deepEqual(refreshed.opening, candidate.next.opening);
   assert.deepEqual(refreshed.slots, candidate.next.slots);
   assert.notEqual(refreshed.owner.leaf, candidate.next.owner.leaf);
-  assert.equal(refreshed.slots.get(outgoing.event.toString()).ownerAuthority, candidate.next.owner.leaf);
+  const historical = refreshed.slots.get(outgoing.event.toString());
+  assert.equal(historical.ownerAuthority, candidate.next.owner.leaf);
+  assert.notEqual(historical.ownerAuthority, refreshed.owner.leaf);
+  assert.equal(historical.peerAuthority, f.enrollment.entries[1].leaf);
   assert.equal(candidate.next.checkpoint.root, f.enrollment.root);
   const options = { ...restoreOptions(f, candidate), enrollment, checkpointBytes: refreshed.exportCheckpoint(limits),
     expectedEnrollmentRoot: fieldBytes(enrollment.root) };

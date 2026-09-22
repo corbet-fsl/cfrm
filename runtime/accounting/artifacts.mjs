@@ -12,7 +12,7 @@ export function resourceLimits(input = {}) {
 
 // manifestSha256 comes from the application release pin, not the download.
 // readArtifact sees only these fixed names. No artifact contains a private witness.
-export async function loadArtifacts({ manifestBytes, manifestSha256, readArtifact, limits = {}, loadBrowserWasm = false }) {
+export async function loadArtifacts({ manifestBytes, manifestSha256, readArtifact, limits = {}, loadBrowserWasm = false, loadPeerReservation = false }) {
   const bound = resourceLimits(limits);
   if (!(manifestBytes instanceof Uint8Array) || manifestBytes.length > 1024 * 1024
       || !/^[0-9a-f]{64}$/.test(manifestSha256)) throw new Error('Manifest pin mismatch');
@@ -48,6 +48,19 @@ export async function loadArtifacts({ manifestBytes, manifestSha256, readArtifac
     setup[item.name] = await read('setup/' + item.name, item.sha256, item.bytes);
   }
   if (setup['g1.dat'].length !== manifest.numPoints * 32) throw new Error('Setup point count mismatch');
+  let peerReservation;
+  if (loadPeerReservation) {
+    const pin = manifest.peerReservation;
+    const gates = Number(pin?.stats?.numGatesDyadic);
+    if (pin?.mode !== 'peer-reservation-v3' || pin.publicInputs !== 389 || pin.sharesAccountSetup !== true
+        || !Number.isSafeInteger(gates) || gates <= 0
+        || gates + 1 > manifest.numPoints) throw new Error('Pinned peer circuit/setup contract');
+    const peerCircuitBytes = await read('peer-reservation/circuit.json', pin.circuitSha256);
+    const peerVerificationKey = await read('peer-reservation/vk.bin', pin.vkSha256);
+    const peerCircuit = JSON.parse(new TextDecoder().decode(peerCircuitBytes));
+    if (typeof peerCircuit.bytecode !== 'string' || !peerCircuit.bytecode.length) throw new Error('Missing compiled peer circuit');
+    peerReservation = { circuitBytes: peerCircuitBytes, circuit: peerCircuit, verificationKey: peerVerificationKey };
+  }
   let browserWasm;
   if (loadBrowserWasm) {
     if (!Array.isArray(manifest.wasm) || manifest.wasm.length !== 1
@@ -56,7 +69,7 @@ export async function loadArtifacts({ manifestBytes, manifestSha256, readArtifac
     if (!Number.isSafeInteger(wasm.bytes) || wasm.bytes <= 8) throw new Error('Browser Wasm size');
     browserWasm = await read(wasm.name,wasm.sha256,wasm.bytes);
   }
-  return { manifest, circuit, verificationKey, setup, browserWasm, limits: bound };
+  return { manifest, circuit, verificationKey, setup, browserWasm, peerReservation, limits: bound };
 }
 
 // bb.js 5.0.0 accepts only a URL and rewrites its final basename to add
@@ -78,7 +91,8 @@ export async function withPinnedBrowserWasm(bytes, create) {
 export function artifactFetcher(base, fetchImpl = globalThis.fetch) {
   const root = new URL(base);
   return async (name, maximum) => {
-    if (!['manifest.json','circuit.json','vk.bin','setup/g1.dat','setup/g2.dat','barretenberg-threads.wasm'].includes(name)) throw new Error('Artifact name');
+    if (!['manifest.json','circuit.json','vk.bin','setup/g1.dat','setup/g2.dat','barretenberg-threads.wasm',
+      'peer-reservation/circuit.json','peer-reservation/vk.bin'].includes(name)) throw new Error('Artifact name');
     const response = await fetchImpl(new URL(name, root), { redirect: 'error', credentials: 'omit' });
     if (!response.ok || !response.body) throw new Error('Artifact fetch failed');
     const reader = response.body.getReader(), chunks = []; let size = 0;

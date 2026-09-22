@@ -116,6 +116,27 @@ request with a fresh signed challenge. They do not recover lost private openings
 Transport receives no prover candidate. Grants and device authorizations retain
 their existing camelCase wire formats.
 
+`createAccountActor` composes that client with the genuine prover and private
+`AccountWitness`. Supply independently verified enrollment and its separate root
+pin, the owner secret, policy, operator key, clock, current authority, typed cmsg
+`authorizeRequest`/`authorizeStatus` callbacks, and local storage callbacks
+`{ load, seal, open, compareAndSwap }` with explicit journal/checkpoint bounds.
+The actor serializes transitions, persists the exact signed pending request and
+successor opening before submission, and installs only a verified, durably saved
+acceptance. `recover` retries that request or resolves it through authenticated
+status; ambiguous storage writes require an authenticated reload. It never
+reconstructs missing private openings from public state. `reservation` retrieves
+an existing private event only when peer, nonce, group, role, policy and lease
+match, allowing interrupted activation to resume without another reservation.
+`accepted` and `slots` return copies; these local slot handles are never transport
+fields. `withEnrollment` refreshes the verified roster without changing the
+accepted state. `provePeer` uses that retained opening; `verifyPeer` additionally
+requires `authorityExpiresAt` and checks fresh authenticated status against the
+retained local state for an own presentation. The embedding owns encryption,
+CAS/rollback protection and a common conversation release lock: before every
+apply, including retries, durably invalidate any cached own-state send gates.
+After acceptance, cmsg must bind a fresh own presentation before releasing data.
+
 The Rust `AccountService` exposes only authenticated `apply` and `status` on its
 member JSON boundary. It owns the trusted clock and refreshes durable policy
 before requests; the existing ledger rechecks time, policy, authority and state
@@ -124,6 +145,32 @@ tuning methods are separate from member requests. An embedding must authorize
 administrative calls and authenticate distribution of policy/artifact pins.
 HTTP/onion transport, request-body streaming limits and response error mapping
 belong to the embedding. No HTTP route or deployed service is installed here.
+
+For protected first contact, opt into the existing peer-reservation-v3 circuit
+with `createAccountProver({ ...artifactOptions, peerReservations: true,
+operatorPublicKey })`. The operator key is a separately pinned 32-byte
+`Uint8Array`. The manifest must additionally pin `peer-reservation/circuit.json`
+and `peer-reservation/vk.bin`, their 389 public inputs and shared account setup.
+These files count toward the same caller-configured artifact limits. The runtime
+reuses its existing serialized Wasm backend and setup; it exposes `peerScope`,
+`provePeer({ state, event, accountAcceptance, context })`, and
+`verifyPeer(presentation, context)`. `createAccountVerifier` accepts the same
+options and exposes verification only. The prover requires the retained opening
+of an actually accepted state and verifies both the generated proof and the real
+operator signature before returning a presentation.
+
+The trusted context contains `{ now, expected, accountPolicy, enrollmentRoot }`.
+`expected` must bind the existing cmsg fresh challenge, owner/peer/device authority,
+role, nonce, group, contact policy, history, original opening/expiry, Active phase,
+immutable state policy, and accepted state version/commitment. The embedding must
+independently verify current enrollment/delegation and must additionally compare
+its own presentation with its latest durable accepted local state. Peer evidence
+does not establish that a remote accepted state was never superseded. Successful
+proof verification does not itself consume cmsg's challenge or permit plaintext:
+pass the verified result through cmsg's persisted incoming-reservation consent and
+two-sided Active reservation gates. Presentations reveal the contact pair and
+belong only on the authenticated peer channel, never in named account requests,
+operator storage or diagnostic logs.
 
 `ProcessAccountVerifier` invokes the concrete `node-verifier.mjs` with an
 operator-owned absolute configuration file:

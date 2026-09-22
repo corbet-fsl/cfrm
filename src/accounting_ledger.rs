@@ -18,11 +18,12 @@ use crate::{
         AdmissionTrust, DeviceAuthorization, MAX_INTEGER,
     },
     allocation::{sql_integer, stored_integer},
+    storage::{Connection, Transaction},
     Error,
 };
 use data_encoding::BASE64URL_NOPAD;
 use ed25519_dalek::{Signer, SigningKey};
-use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
+use rusqlite::{params, OptionalExtension, TransactionBehavior};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{path::Path, time::Duration};
@@ -176,6 +177,33 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
     pub fn open(
         path: impl AsRef<Path>,
         trust: AdmissionTrust,
+        policy: AccountLedgerPolicy,
+        verifier: V,
+        operator: SigningKey,
+    ) -> Result<Self, Error> {
+        Self::with_connection(Connection::open(path)?, trust, policy, verifier, operator)
+    }
+
+    #[cfg(all(feature = "turso", not(target_arch = "wasm32")))]
+    pub fn open_remote(
+        config: crate::storage::RemoteConfig,
+        trust: AdmissionTrust,
+        policy: AccountLedgerPolicy,
+        verifier: V,
+        operator: SigningKey,
+    ) -> Result<Self, Error> {
+        Self::with_connection(
+            Connection::open_remote(config)?,
+            trust,
+            policy,
+            verifier,
+            operator,
+        )
+    }
+
+    fn with_connection(
+        mut connection: Connection,
+        trust: AdmissionTrust,
         mut policy: AccountLedgerPolicy,
         verifier: V,
         operator: SigningKey,
@@ -205,10 +233,8 @@ impl<V: AccountProofVerifier> AccountLedger<V> {
             operator.verifying_key().to_bytes(),
             tuning_revision,
         )?;
-        let mut connection = Connection::open(path)?;
-        connection.busy_timeout(Duration::from_secs(5))?;
-        connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
-            PRAGMA foreign_keys=ON;
+        connection.configure_local(Duration::from_secs(5))?;
+        connection.execute_batch("
             CREATE TABLE IF NOT EXISTS cfrm_accounts_config (
               singleton INTEGER PRIMARY KEY CHECK(singleton=1), config BLOB NOT NULL,
               clock_floor INTEGER NOT NULL CHECK(clock_floor>=0));

@@ -12,6 +12,7 @@ crate-type = ["rlib", "cdylib"]
 [features]
 default = []
 sqlite = ["dep:rusqlite"]
+turso = ["sqlite", "dep:libsql", "dep:tokio", "dep:url"]
 permits = ["dep:blind-rsa-signatures", "dep:getrandom", "dep:zeroize"]
 permit-issuer = ["permits", "sqlite", "dep:openssl"]
 browser = ["permits", "dep:wasm-bindgen", "dep:js-sys", "dep:chacha20poly1305"]
@@ -36,6 +37,8 @@ wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3", optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+libsql = { version = "0.9.30", optional = true, default-features = false, features = ["remote", "tls"] }
+url = { version = "2.5", optional = true }
 openssl = { version = "0.10", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "json", "tokio"] }
 tokio = { version = "1", optional = true, features = ["rt-multi-thread", "sync", "time", "net", "macros"] }

@@ -46,6 +46,73 @@ fn policy() -> KeyAccessPolicy {
 fn open(path: &Path, f: &Fixture) -> KeyAccessIssuer {
     KeyAccessIssuer::open(path, f.trust.clone(), epoch(), policy(), private_key()).unwrap()
 }
+
+#[cfg(feature = "turso")]
+#[test]
+#[ignore = "requires the isolated official sqld contract lane"]
+fn remote_blind_quota_redemption_and_replay_survive_restart() {
+    let f = Fixture::new();
+    let prepared = PreparedPermit::new(&epoch(), 110).unwrap();
+    let issue = request(7, &f.device, &prepared, 15);
+    let open_remote = || {
+        KeyAccessIssuer::open_remote(
+            common::remote_config(),
+            f.trust.clone(),
+            epoch(),
+            policy(),
+            private_key(),
+        )
+        .unwrap()
+    };
+    let mut issuer = open_remote();
+    let issued = issuer
+        .issue(
+            &f.grant(7, &f.device),
+            &f.authorize(7, &f.device),
+            &issue,
+            || 110,
+        )
+        .unwrap();
+    drop(issuer);
+    assert_eq!(
+        open_remote()
+            .issue(
+                &f.grant(7, &f.device),
+                &f.authorize(7, &f.device),
+                &issue,
+                || 111,
+            )
+            .unwrap(),
+        issued
+    );
+    let other = PreparedPermit::new(&epoch(), 111).unwrap();
+    let over_quota = request(7, &f.device, &other, 16);
+    assert_eq!(
+        open_remote().issue(
+            &f.grant(7, &f.device),
+            &f.authorize(7, &f.device),
+            &over_quota,
+            || 112,
+        ),
+        Err(Error::Capacity)
+    );
+    let token = prepared.finalize(&issued.blind_signature, 112).unwrap();
+    let redemption = KeyAccessRedemption {
+        permit: token,
+        challenge_digest: encoded(81),
+        expires_at: 200,
+        claim: encoded(82),
+    };
+    let open_redeemer = || {
+        KeyAccessRedeemer::open_remote(common::remote_config(), epoch(), redemption_key()).unwrap()
+    };
+    let stamp = open_redeemer().redeem(&redemption, || 113).unwrap();
+    verify_key_access_stamp(&epoch(), &stamp, &redemption.challenge_digest, 200, 113).unwrap();
+    assert_eq!(open_redeemer().redeem(&redemption, || 114).unwrap(), stamp);
+    let mut replay = redemption;
+    replay.challenge_digest = encoded(83);
+    assert_eq!(open_redeemer().redeem(&replay, || 115), Err(Error::Replay));
+}
 fn request(
     member: u8,
     key: &SigningKey,

@@ -146,9 +146,10 @@ mod native {
         allocation::{sql_integer, stored_integer},
         permit_issuer::{PermitIssuer, PermitRedeemer},
         permits::RedemptionRequest,
+        storage::Connection,
     };
     use ed25519_dalek::SigningKey;
-    use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+    use rusqlite::{params, OptionalExtension, TransactionBehavior};
     use std::{path::Path, time::Duration};
 
     #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -186,6 +187,33 @@ mod native {
             policy: KeyAccessPolicy,
             private_der: &[u8],
         ) -> Result<Self, Error> {
+            Self::with_connection(Connection::open(path)?, trust, epoch, policy, private_der)
+        }
+
+        #[cfg(all(feature = "turso", not(target_arch = "wasm32")))]
+        pub fn open_remote(
+            config: crate::storage::RemoteConfig,
+            trust: AdmissionTrust,
+            epoch: PermitEpoch,
+            policy: KeyAccessPolicy,
+            private_der: &[u8],
+        ) -> Result<Self, Error> {
+            Self::with_connection(
+                Connection::open_remote(config)?,
+                trust,
+                epoch,
+                policy,
+                private_der,
+            )
+        }
+
+        fn with_connection(
+            mut connection: Connection,
+            trust: AdmissionTrust,
+            epoch: PermitEpoch,
+            policy: KeyAccessPolicy,
+            private_der: &[u8],
+        ) -> Result<Self, Error> {
             let context = validate_key_access_epoch(&epoch)?;
             if trust.community_id != epoch.community_id
                 || policy.maximum_per_member == 0
@@ -197,9 +225,8 @@ mod native {
             }
             decode::<32>(&trust.policy_digest)?;
             let issuer = PermitIssuer::from_pkcs1_der(&epoch, private_der)?;
-            let mut connection = Connection::open(path)?;
-            connection.busy_timeout(Duration::from_secs(5))?;
-            connection.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;
+            connection.configure_local(Duration::from_secs(5))?;
+            connection.execute_batch("
                 CREATE TABLE IF NOT EXISTS cfrm_permit_epochs (context TEXT PRIMARY KEY,key_digest TEXT NOT NULL UNIQUE) WITHOUT ROWID;
                 CREATE TABLE IF NOT EXISTS cfrm_key_access_clock (singleton INTEGER PRIMARY KEY CHECK(singleton=1),floor INTEGER NOT NULL);
                 INSERT INTO cfrm_key_access_clock VALUES(1,0) ON CONFLICT DO NOTHING;
@@ -409,6 +436,19 @@ mod native {
         redeemer: PermitRedeemer,
     }
     impl KeyAccessRedeemer {
+        #[cfg(all(feature = "turso", not(target_arch = "wasm32")))]
+        pub fn open_remote(
+            config: crate::storage::RemoteConfig,
+            epoch: PermitEpoch,
+            key: SigningKey,
+        ) -> Result<Self, Error> {
+            validate_key_access_epoch(&epoch)?;
+            Ok(Self {
+                redeemer: PermitRedeemer::open_remote(config, &epoch, key)?,
+                epoch,
+            })
+        }
+
         pub fn open(
             path: impl AsRef<Path>,
             epoch: PermitEpoch,

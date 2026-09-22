@@ -14,6 +14,8 @@ capture() {
   trap - EXIT
   set +e
   test ! -f Cargo.lock || cp Cargo.lock "$artifact_dir/Cargo.lock"
+  test ! -f package-lock.json || cp package-lock.json "$artifact_dir/package-lock.json"
+  test ! -f runtime/accounting/package-lock.json || cp runtime/accounting/package-lock.json "$artifact_dir/runtime-package-lock.json"
   if test "${PRODUCT_SUITE:-all}" = all; then
     cargo fmt --all -- --check > "$artifact_dir/format.log" 2>&1
     format_status=$?
@@ -25,6 +27,11 @@ capture() {
 }
 trap capture EXIT
 accounting_contracts() {
+  if test "${RESOLVE_DEPENDENCIES:-0}" = 1; then
+    timeout 600 npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+    timeout 600 npm install --prefix runtime/accounting --package-lock-only --ignore-scripts --no-audit --no-fund
+    date -u +%FT%TZ > "$artifact_dir/npm-resolution-time.txt"
+  fi
   if timeout 600 npm ci --prefix runtime/accounting --ignore-scripts --no-audit --no-fund; then
     timeout 180 node --test runtime/accounting/test/*.test.mjs 2>&1 | tee "$artifact_dir/accounting-js.log" || result=$?
   else result=$?; fi

@@ -3,9 +3,20 @@
   "version": "0.1.0-alpha.1",
   "private": true,
   "type": "module",
-  "exports": { ".": "./index.mjs", "./node-verifier": "./node-verifier.mjs" },
-  "engines": { "node": ">=24" },
-  "scripts": { "test": "node --test test/*.test.mjs" },
-  "dependencies": { "@aztec/bb.js": "5.0.0", "@noir-lang/noir_js": "1.0.0-beta.26" },
+  "exports": {
+    ".": "./index.mjs",
+    "./node-verifier": "./node-verifier.mjs"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@aztec/bb.js": "5.0.0",
+    "@noir-lang/noir_js": "1.0.0-beta.26",
+    "@libsql/client": "0.18.0"
+  },
   "license": "SEE LICENSE IN ../../LICENSE.md"
 }

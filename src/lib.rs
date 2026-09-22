@@ -27,6 +27,8 @@ pub mod key_access;
 pub mod permit_issuer;
 #[cfg(feature = "permits")]
 pub mod permits;
+#[cfg(feature = "sqlite")]
+pub mod storage;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Error {

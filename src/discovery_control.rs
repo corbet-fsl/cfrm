@@ -5,9 +5,10 @@ use crate::{
     allocation::{sql_integer, stored_integer},
     discovery::{DiscoveryLimits, DiscoveryOperation, VerifiedDiscoveryRequest},
     discovery_store::{transition, MemberControl},
+    storage::Connection,
     Error,
 };
-use rusqlite::{params, Connection, OptionalExtension, TransactionBehavior};
+use rusqlite::{params, OptionalExtension, TransactionBehavior};
 use std::{path::Path, sync::Mutex, time::Duration};
 
 pub struct SqliteDiscoveryControl {
@@ -156,6 +157,43 @@ mod tests {
         assert!(!state.contains("PRIVATE_READ_TARGET_CANARY"));
         assert!(!state.contains("OTHER_TARGET"));
         assert!(!state.contains("request_id"));
+    }
+
+    #[cfg(all(feature = "turso", not(target_arch = "wasm32")))]
+    #[test]
+    #[ignore = "requires the isolated official sqld contract lane"]
+    fn remote_discovery_quota_survives_restart() {
+        assert_eq!(std::env::var("CI").as_deref(), Ok("true"));
+        let open = || {
+            let url = std::env::var("CFRM_TURSO_CONTRACT_URL").unwrap();
+            assert!(url.starts_with("http://127.0.0.1:"));
+            SqliteDiscoveryControl::open_remote(crate::storage::RemoteConfig {
+                url,
+                auth_token: "isolated-contract-only".into(),
+                timeout: Duration::from_secs(5),
+            })
+            .unwrap()
+        };
+        let first = request(
+            DiscoveryOperation::Fetch {
+                member_id: "target".into(),
+            },
+            "remote-one",
+        );
+        let control = open();
+        control.authorize(&first, &limits(), 110).unwrap();
+        drop(control);
+        let control = open();
+        let next = request(
+            DiscoveryOperation::Fetch {
+                member_id: "another-target".into(),
+            },
+            "remote-two",
+        );
+        assert!(matches!(
+            control.authorize(&next, &limits(), 112),
+            Err(Error::Capacity)
+        ));
     }
 
     #[test]
@@ -311,17 +349,31 @@ pub(crate) struct ControlCommit {
 
 impl SqliteDiscoveryControl {
     pub fn open(path: impl AsRef<Path>, busy_timeout: Duration) -> Result<Self, Error> {
+        Self::with_connection(
+            Connection::open(path).map_err(|_| Error::Storage)?,
+            busy_timeout,
+        )
+    }
+
+    #[cfg(all(feature = "turso", not(target_arch = "wasm32")))]
+    pub fn open_remote(config: crate::storage::RemoteConfig) -> Result<Self, Error> {
+        let timeout = config.timeout;
+        Self::with_connection(
+            Connection::open_remote(config).map_err(|_| Error::Storage)?,
+            timeout,
+        )
+    }
+
+    fn with_connection(connection: Connection, busy_timeout: Duration) -> Result<Self, Error> {
         if busy_timeout.is_zero() || busy_timeout.as_millis() > i32::MAX as u128 {
             return Err(Error::InvalidInput);
         }
-        let connection = Connection::open(path).map_err(|_| Error::Storage)?;
         connection
-            .busy_timeout(busy_timeout)
+            .configure_local(busy_timeout)
             .map_err(|_| Error::Storage)?;
         connection
             .execute_batch(
-                "PRAGMA journal_mode=WAL;
-             PRAGMA synchronous=FULL;
+                "
              CREATE TABLE IF NOT EXISTS cfrm_discovery_scopes (
                community TEXT PRIMARY KEY NOT NULL,
                limits TEXT NOT NULL,

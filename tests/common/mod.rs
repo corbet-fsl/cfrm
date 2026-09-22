@@ -107,3 +107,16 @@ pub fn onion() -> String {
     bytes.push(3);
     format!("{}.onion", BASE32_NOPAD.encode(&bytes).to_lowercase())
 }
+/// Only the separate disposable official-sqld CI contract sets this endpoint.
+#[cfg(all(feature = "turso", not(target_arch = "wasm32")))]
+#[allow(dead_code)]
+pub fn remote_config() -> cfrm::storage::RemoteConfig {
+    assert_eq!(std::env::var("CI").as_deref(), Ok("true"));
+    let url = std::env::var("CFRM_TURSO_CONTRACT_URL").expect("isolated official sqld endpoint");
+    assert!(url.starts_with("http://127.0.0.1:"));
+    cfrm::storage::RemoteConfig {
+        url,
+        auth_token: "isolated-contract-only".into(),
+        timeout: std::time::Duration::from_secs(5),
+    }
+}

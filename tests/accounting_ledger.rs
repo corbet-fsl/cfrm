@@ -120,6 +120,59 @@ fn sign(request: &mut AccountRequest, key: &SigningKey) {
             .to_bytes(),
     );
 }
+
+#[cfg(feature = "turso")]
+#[test]
+#[ignore = "requires the isolated official sqld contract lane"]
+fn remote_account_frontier_retry_restart_and_rejected_successor() {
+    let f = Fixture::new();
+    let open_remote = || {
+        AccountLedger::open_remote(
+            common::remote_config(),
+            f.trust.clone(),
+            policy(),
+            StorageOnlyVerifier::default(),
+            SigningKey::from_bytes(&[9; 32]),
+        )
+        .unwrap()
+    };
+    let mut ledger = open_remote();
+    ledger.admit_checkpoint(0, fr(8)).unwrap();
+    let grant = f.grant(7, &f.device);
+    let authorization = f.authorize(7, &f.device);
+    let first = genesis(&f);
+    let accepted = ledger
+        .apply(&grant, &authorization, &first, || 120)
+        .unwrap();
+    drop(ledger);
+    let mut ledger = open_remote();
+    assert_eq!(
+        ledger
+            .apply(&grant, &authorization, &first, || 121)
+            .unwrap(),
+        accepted
+    );
+    let next = successor(&first, &f, 11);
+    let mut rejected = next.clone();
+    rejected.proof = vec![4, 5, 6];
+    sign(&mut rejected, &f.device);
+    assert_eq!(
+        ledger.apply(&grant, &authorization, &rejected, || 130),
+        Err(Error::CryptoProvider)
+    );
+    let winner = ledger.apply(&grant, &authorization, &next, || 130).unwrap();
+    let competing = successor(&first, &f, 12);
+    assert!(ledger
+        .apply(&grant, &authorization, &competing, || 131)
+        .is_err());
+    drop(ledger);
+    assert_eq!(
+        open_remote()
+            .apply(&grant, &authorization, &next, || 132)
+            .unwrap(),
+        winner
+    );
+}
 fn genesis(fixture: &Fixture) -> AccountRequest {
     let community: [u8; 32] = Sha256::digest(fixture.trust.community_id.as_bytes()).into();
     let owner = B64

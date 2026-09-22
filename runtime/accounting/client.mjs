@@ -1,6 +1,6 @@
 import { be, cat, random, sha } from './encoding.mjs';
 import { statementBytes } from './witness.mjs';
-import { validateStatement } from './runtime.mjs';
+import { validateStatement } from './witness.mjs';
 
 const utf8 = value => new TextEncoder().encode(value);
 const equal = (a,b) => a.length === b.length && a.every((v,i) => v === b[i]);
