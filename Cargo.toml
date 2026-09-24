@@ -1,6 +1,6 @@
 [package]
 name = "cfrm"
-version = "0.1.0-alpha.1"
+version = "0.1.0-alpha.2"
 edition = "2021"
 description = "Portable authenticated meeting board and operator introduction allocations"
 repository = "https://github.com/cmtymeet/cfrm"
