@@ -3,7 +3,7 @@ name = "cfrm"
 version = "0.1.0-alpha.2"
 edition = "2021"
 description = "Portable authenticated meeting board and operator introduction allocations"
-repository = "https://github.com/cmtymeet/cfrm"
+repository = "https://github.com/corbet-libs/cfrm"
 license-file = "LICENSE.md"
 
 [lib]

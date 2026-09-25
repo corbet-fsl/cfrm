@@ -33,7 +33,7 @@ Supply independently pinned roster trust and explicit resource limits. Keep
 permit epochs independently pinned, save encrypted checkpoints before network
 requests, retry exact saved requests, and call `free()` on Wasm objects when
 finished. The generated types and the
-[binding contract](https://github.com/cmtymeet/cfrm/blob/main/browser/README.md)
+[binding contract](https://github.com/corbet-libs/cfrm/blob/main/browser/README.md)
 describe the constructors and lifecycle. Preserve the CI source revision when
 consulting source documentation.
 

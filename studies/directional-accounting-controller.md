@@ -41,7 +41,7 @@ Exact committed retries change no counters or maturity; preserve the service's d
 
 ## Consent and the first reversed action
 
-Receive limits apply only to the receiver's own authorized redemption, never to unsolicited preflight, copied certificates, visits or local decline. A sender can commit `A` before the receiver reaches its `B` cap; subsequent refusal leaves an unmatched debit without automatic refund. The [first-contact release contract](https://github.com/cmtymeet/cmsg/blob/main/studies/first-contact-release-gate.md) retains this fairness limitation.
+Receive limits apply only to the receiver's own authorized redemption, never to unsolicited preflight, copied certificates, visits or local decline. A sender can commit `A` before the receiver reaches its `B` cap; subsequent refusal leaves an unmatched debit without automatic refund. The [first-contact release contract](https://github.com/corbet-libs/cmsg/blob/main/studies/first-contact-release-gate.md) retains this fairness limitation.
 
 The first reversed action still needs actual integration: the former receiver becomes named authorizer, the former sender anonymously acknowledges and redeems its receipt. It consumes no additional introduction permit. Encrypted client contact/direction/pending state must distinguish it from a new approach; ordinary established messages remain free.
 

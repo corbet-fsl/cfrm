@@ -16,7 +16,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
-          repository: cmtymeet/cvld
+          repository: corbet-libs/cvld
           ref: 0f1ee4df3cc72294ba624de85542cc112c1bbbd7
           path: .ci/cvld
           persist-credentials: false

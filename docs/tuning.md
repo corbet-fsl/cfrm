@@ -66,7 +66,7 @@ Circuit/VK hashes, signature rules, field encodings, privacy checks and replay
 requirements are security invariants. Tuning does not weaken them. Runtime
 changes to other economic rules need their own proved state-continuity design;
 opening a new database or issuing a second genesis is not a policy update.
-The cmsg package has its own [tuning inventory](https://github.com/cmtymeet/cmsg/blob/main/docs/tuning.md).
+The cmsg package has its own [tuning inventory](https://github.com/corbet-libs/cmsg/blob/main/docs/tuning.md).
 
 ## Metrics and change discipline
 

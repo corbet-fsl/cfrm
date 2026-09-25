@@ -42,7 +42,7 @@ return `true`, including after restart, without another counter increment.
 
 Neither counter proves text delivery, reading or sincere conversation. This
 boundary alone allows a recipient to omit redemption. The separately tested
-[sender-side content release gate](https://github.com/cmtymeet/cmsg/blob/main/studies/first-contact-release-gate.md)
+[sender-side content release gate](https://github.com/corbet-libs/cmsg/blob/main/studies/first-contact-release-gate.md)
 withholds the honest sender's first MLS content until both actual counter
 statements verify. This conditional result neither proves reading nor enforces a
 dishonest sender. The boolean raw redemption result is an experimental
