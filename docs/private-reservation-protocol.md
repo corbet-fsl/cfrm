@@ -1,5 +1,7 @@
 # Private reservation protocol
 
+> Historical prototype documentation. It does not describe the current Forum API or storage authority. See the [current contract](CONTRACT.md) and the [original research snapshot](https://github.com/corbet-libs/cfrm/blob/b4bb89c81c4d4856c8ae04da3151eb4d8104ad8d/docs/private-reservation-protocol.md).
+
 **2026-09-15 — partially implemented experimental protocol; not audited or enabled for production.**
 
 This extends the requirements in [Private reciprocal accounting](private-accounting.md)

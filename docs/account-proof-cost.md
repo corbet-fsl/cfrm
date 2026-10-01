@@ -1,5 +1,7 @@
 # Browser account proof cost
 
+> Historical prototype documentation. It does not describe the current Forum API or storage authority. See the [current contract](CONTRACT.md) and the [original research snapshot](https://github.com/corbet-libs/cfrm/blob/b4bb89c81c4d4856c8ae04da3151eb4d8104ad8d/docs/account-proof-cost.md).
+
 The [account-state evidence](../experiments/private-accounting/account-state/README.md)
 records real browser proofs and Rust ledger concurrency/retry. Account proofs
 take roughly 28 seconds and sampled Chromium memory exceeds 1 GiB on the

@@ -15,3 +15,20 @@ assert.equal(validate({...challenge, version: 2}), false);
 assert.equal(validate({...challenge, unknown: true}), false);
 assert.equal(validate({...challenge, request: {...challenge.request, input: {credential: [256]}}}), false);
 assert.equal(validate({...challenge, request: {...challenge.request, input: {credential: [], extra: 1}}}), false);
+
+const catalog = JSON.parse(readFileSync('generated/mcp.json', 'utf8'));
+assert.equal(catalog.tools.length, validators.size);
+for (const tool of catalog.tools) {
+  const operation = api.paths[`/v1/${tool.name}`].post;
+  assert.deepEqual(tool.inputSchema, operation.requestBody.content['application/json'].schema);
+  assert.equal(tool._meta['cfrm/authority'], operation['x-authority']);
+  const validateTool = new Ajv({strict: false}).compile(tool.inputSchema);
+  assert.equal(validateTool(challenge), tool.name === 'challenge');
+  if (tool._meta['cfrm/authority'] === 'AnonymousRoomPass') {
+    const input = {room_pass: [1], command: [2]};
+    const call = {version: 1, request: {action: tool.name, input}};
+    assert.equal(validateTool(call), true);
+    assert.equal(validateTool({...call, request: {...call.request, input: {...input,
+      possession: {session: [1], request_nonce: [2], signature: [3]}}}}), false);
+  }
+}

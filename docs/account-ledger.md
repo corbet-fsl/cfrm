@@ -1,5 +1,7 @@
 # Durable private account ledger
 
+> Historical prototype documentation. It does not describe the current Forum API or storage authority. See the [current contract](CONTRACT.md) and the [original research snapshot](https://github.com/corbet-libs/cfrm/blob/b4bb89c81c4d4856c8ae04da3151eb4d8104ad8d/docs/account-ledger.md).
+
 The experimental [Rust ledger](../src/accounting_ledger.rs) accepts one opaque
 state per permanent member and atomically records each verified successor.
 It stores no peer, conversation tuple, private receipt, balance or map opening.

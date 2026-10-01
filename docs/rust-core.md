@@ -1,5 +1,7 @@
 # Rust meeting board and introduction allocations
 
+> Historical prototype documentation. It does not describe the current Forum API or storage authority. See the [current contract](CONTRACT.md) and the [original research snapshot](https://github.com/corbet-libs/cfrm/blob/b4bb89c81c4d4856c8ae04da3151eb4d8104ad8d/docs/rust-core.md).
+
 The Rust library provides independently authenticated public presence and a
 durable operator-side allocation ledger. Its default feature set contains only
 portable verification and board code. `--features sqlite` adds the native

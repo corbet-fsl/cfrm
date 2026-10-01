@@ -1,5 +1,7 @@
 # State and composition boundaries
 
+> Historical prototype documentation. It does not describe the current Forum API or storage authority. See the [current contract](CONTRACT.md) and the [original research snapshot](https://github.com/corbet-libs/cfrm/blob/b4bb89c81c4d4856c8ae04da3151eb4d8104ad8d/docs/boundaries.md).
+
 cfrm is one of three repository boundaries: cvld handles passkeys and independent-provider eligibility; cfrm owns live community discovery and numerical participation rules; cmsg owns encrypted private text conversations. There is no separate rules repository.
 
 The simulator's delivered, sent and received counts are **simulator-only observations**. Its historical directional-imbalance and endorsement proposals are not the selected private policy. The experimental [v2 account ledger](account-ledger.md) instead proves shared incoming/outgoing reservations, resolution, expiry and refill under the [reciprocity policy](reciprocity-policy.md), with private peer presentations and cmsg protected release. The earlier [private-accounting contract](../studies/private-accounting-contract.md) remains a record of the simulator's observability limits.

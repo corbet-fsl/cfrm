@@ -134,6 +134,7 @@ jobs:
     - uses: Swatinem/rust-cache@v2
       with:
         prefix-key: coverage
+        cache-on-failure: true
     - uses: taiki-e/install-action@v2
       with:
         tool: cargo-llvm-cov
@@ -148,7 +149,7 @@ jobs:
       run: cargo llvm-cov report --locked --branch --ignore-filename-regex '/tests/'
         --lcov --output-path coverage.lcov
     - name: Require complete line and branch coverage
-      run: python3 .github/check-coverage.py coverage.json
+      run: python3 .github/check-coverage.py coverage.lcov coverage.json
     - uses: actions/upload-artifact@v4
       if: always()
       with:

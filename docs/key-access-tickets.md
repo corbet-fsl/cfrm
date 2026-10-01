@@ -1,5 +1,7 @@
 # Profile key resource tickets
 
+> Historical prototype documentation. It does not describe the current Forum API or storage authority. See the [current contract](CONTRACT.md) and the [original research snapshot](https://github.com/corbet-libs/cfrm/blob/b4bb89c81c4d4856c8ae04da3151eb4d8104ad8d/docs/key-access-tickets.md).
+
 Profile reads and key requests do not consume introduction credit. The
 `key_access` module provides a separate per-member resource quota and anonymous
 single-use bearer tickets using the existing RFC 9474 implementation. It never

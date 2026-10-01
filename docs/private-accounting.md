@@ -1,5 +1,7 @@
 # Private reciprocal accounting: backend decision review
 
+> Historical prototype documentation. It does not describe the current Forum API or storage authority. See the [current contract](CONTRACT.md) and the [original research snapshot](https://github.com/corbet-libs/cfrm/blob/b4bb89c81c4d4856c8ae04da3151eb4d8104ad8d/docs/private-accounting.md).
+
 **2026-09-15 — historical backend review and measurements; not an audit.**
 Inspected cfrm `2c4fa47` and the current cmsg identity, receipt and directional
 Inbox work for the initial review. The later isolated spike was executed on Crow;

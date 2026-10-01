@@ -22,13 +22,14 @@ dto!(SearchInput { possession: Possession, cursor: Option<Vec<u8>>, page_size: u
 dto!(WatchInput { possession: Possession, cursor: Vec<u8> });
 dto!(CiphertextInput { possession: Possession, owner: Vec<u8>, revision: Vec<u8> });
 // The room owner defines the bounded opaque command and permit encoding.
-dto!(RoomInput { possession: Possession, command: Vec<u8> });
+dto!(RoomInput { room_pass: Vec<u8>, command: Vec<u8> });
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 pub enum Requirement {
     Credential,
     DeviceChallenge,
     CurrentDeviceSession,
+    AnonymousRoomPass,
 }
 
 pub struct ActionInfo {
@@ -82,10 +83,10 @@ actions! {
     Search => "search" (SearchInput) CurrentDeviceSession,
     Watch => "watch" (WatchInput) CurrentDeviceSession,
     Ciphertext => "ciphertext" (CiphertextInput) CurrentDeviceSession,
-    RoomOrder => "room_order" (RoomInput) CurrentDeviceSession,
-    RoomRelay => "room_relay" (RoomInput) CurrentDeviceSession,
-    RoomResume => "room_resume" (RoomInput) CurrentDeviceSession,
-    RoomHandover => "room_handover" (RoomInput) CurrentDeviceSession,
+    RoomOrder => "room_order" (RoomInput) AnonymousRoomPass,
+    RoomRelay => "room_relay" (RoomInput) AnonymousRoomPass,
+    RoomResume => "room_resume" (RoomInput) AnonymousRoomPass,
+    RoomHandover => "room_handover" (RoomInput) AnonymousRoomPass,
 }
 
 dto!(Call {
@@ -141,11 +142,7 @@ pub fn openapi() -> Value {
         paths.insert(format!("/v1/{}", action.name), json!({"post": {
             "operationId": action.name,
             "x-authority": action.requirement,
-            "requestBody": {"required":true,"content":{"application/json":{"schema":{
-                "allOf":[schema::<Call>(),{"properties":{
-                    "version":{"const":1},"request":{"properties":{"action":{"const":action.name}}}
-                }}]
-            }}}},
+            "requestBody": {"required":true,"content":{"application/json":{"schema":request_schema(action.name)}}},
             "responses":{"503":{"description":"Required current authority unavailable","content":{"application/json":{"schema":schema::<Failure>()}}}}
         }}));
     }
@@ -156,4 +153,32 @@ fn schema<T: JsonSchema>() -> Value {
     let mut settings = schemars::generate::SchemaSettings::default();
     settings.inline_subschemas = true;
     json!(settings.into_generator().into_root_schema_for::<T>())
+}
+
+/// MCP projection of the same versioned action registry. Transport hosts must
+/// preserve original arguments for execute_tool and enforce their session class.
+pub fn mcp_tools() -> Value {
+    json!({"tools": actions().into_iter().map(|action| json!({
+        "name":action.name,
+        "description":format!("Forum {}", action.name),
+        "inputSchema":request_schema(action.name),
+        "outputSchema":schema::<Failure>(),
+        "_meta":{"cfrm/authority":action.requirement}
+    })).collect::<Vec<_>>()})
+}
+
+/// Arguments are original JSON bytes, not a pre-decoded map that lost duplicate
+/// fields. Missing current authority refuses exactly as the HTTP/Rust path does.
+pub fn execute_tool(name: &str, arguments: &[u8], maximum: usize) -> Result<std::convert::Infallible, ErrorCode> {
+    let call = Call::decode(arguments, maximum)?;
+    if call.request.info().name != name {
+        return Err(ErrorCode::InvalidRequest);
+    }
+    execute(&call)
+}
+
+fn request_schema(name: &str) -> Value {
+    json!({"type":"object","allOf":[schema::<Call>(),{"properties":{
+        "version":{"const":1},"request":{"properties":{"action":{"const":name}}}
+    }}]})
 }
