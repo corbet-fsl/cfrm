@@ -30,7 +30,13 @@ jobs:
 
         sha256sum Cargo.lock >> resolver.txt
 
-        npm install --package-lock-only --ignore-scripts --no-audit --no-fund'
+        npm update --package-lock-only --ignore-scripts --no-audit --no-fund
+
+        node --version >> resolver.txt
+
+        npm --version >> resolver.txt
+
+        sha256sum package-lock.json >> resolver.txt'
     - uses: actions/upload-artifact@v7
       with:
         name: resolved-lock
