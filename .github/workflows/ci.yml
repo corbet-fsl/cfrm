@@ -1,0 +1,163 @@
+name: ci
+concurrency:
+  group: ci-${{ github.repository }}
+  cancel-in-progress: false
+permissions:
+  contents: read
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        persist-credentials: false
+    - uses: dtolnay/rust-toolchain@stable
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+    - name: Resolve one fresh dependency snapshot
+      run: 'cargo update
+
+        rustc --version > resolver.txt
+
+        cargo --version >> resolver.txt
+
+        date -u +%FT%TZ >> resolver.txt
+
+        sha256sum Cargo.lock >> resolver.txt
+
+        npm install --package-lock-only --ignore-scripts --no-audit --no-fund'
+    - uses: actions/upload-artifact@v4
+      with:
+        name: resolved-lock
+        path: 'Cargo.lock
+
+          resolver.txt
+
+          package-lock.json'
+        retention-days: 7
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        persist-credentials: false
+    - uses: actions/download-artifact@v4
+      with:
+        name: resolved-lock
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt, clippy
+    - uses: Swatinem/rust-cache@v2
+    - run: rustc --version
+    - run: rustc --version
+    - name: Check formatting and retain a repair patch
+      run: 'cargo fmt --all
+
+        git diff --exit-code -- ''*.rs'' > format.patch'
+      continue-on-error: false
+    - uses: actions/upload-artifact@v4
+      if: failure()
+      with:
+        name: format
+        path: format.patch
+    - run: cargo clippy --locked --all-targets -- -D warnings
+    - run: cargo test --locked --all-targets
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: wasm-pack
+    - uses: browser-actions/setup-chrome@v1
+      with:
+        install-chromedriver: true
+    - name: Execute portable wire vectors in Chrome
+      run: wasm-pack test --headless --chrome --locked --no-default-features --lib
+    - run: cargo run --locked --example export
+    - uses: actions/setup-node@v4
+      with:
+        node-version: lts/*
+    - run: npx --yes --package typescript tsc --strict --noEmit --lib es2022,dom generated/client.ts
+    - uses: actions/upload-artifact@v4
+      with:
+        name: generated-api
+        path: generated/
+    needs:
+    - resolve
+  dependency-policy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        persist-credentials: false
+    - uses: actions/download-artifact@v4
+      with:
+        name: resolved-lock
+    - run: python3 .github/check-first-party.py
+    - uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
+      with:
+        tool: cargo-deny
+    - run: cargo deny --locked check advisories
+    needs:
+    - resolve
+  coverage:
+    needs:
+    - resolve
+    - check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.pull_request.head.sha || github.sha }}
+        persist-credentials: false
+    - uses: actions/download-artifact@v4
+      with:
+        name: resolved-lock
+    - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: llvm-tools-preview
+    - uses: Swatinem/rust-cache@v2
+      with:
+        prefix-key: coverage
+    - uses: taiki-e/install-action@v2
+      with:
+        tool: cargo-llvm-cov
+    - run: 'rustc --version
+
+        cargo llvm-cov --version'
+    - name: Measure real native round trips and failure paths
+      run: cargo llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage
+        --no-cfg-coverage-nightly --ignore-filename-regex "/tests/" --json --output-path
+        coverage.json
+    - name: Export exact line and branch locations
+      run: cargo llvm-cov report --locked --branch --ignore-filename-regex '/tests/'
+        --lcov --output-path coverage.lcov
+    - name: Require complete line and branch coverage
+      run: python3 .github/check-coverage.py coverage.json
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: coverage
+        path: 'coverage.json
+
+          coverage.lcov
+
+          Cargo.lock
+
+          resolver.txt'
+        retention-days: 7
+'on':
+  push:
+    branches:
+    - main
+    - candidate/**
+  pull_request: null
+  workflow_dispatch: null
+env:
+  CARGO_BUILD_JOBS: 2
+  CARGO_TERM_COLOR: always

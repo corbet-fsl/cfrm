@@ -1,62 +1,31 @@
 [package]
 name = "cfrm"
-version = "0.1.0-alpha.2"
-edition = "2021"
-description = "Portable authenticated meeting board and operator introduction allocations"
+version = "0.2.0"
+edition = "2024"
+description = "Authenticated volatile forum API"
 repository = "https://github.com/corbet-libs/cfrm"
 license-file = "LICENSE.md"
-
-[lib]
-crate-type = ["rlib", "cdylib"]
+publish = false
 
 [features]
-default = []
-sqlite = ["dep:rusqlite"]
-turso = ["sqlite", "dep:libsql", "dep:tokio", "dep:url"]
-permits = ["dep:blind-rsa-signatures", "dep:getrandom", "dep:zeroize"]
-permit-issuer = ["permits", "sqlite", "dep:openssl"]
-browser = ["permits", "dep:wasm-bindgen", "dep:js-sys", "dep:chacha20poly1305"]
-discovery-api = ["dep:axum", "dep:tokio"]
-discovery-valkey = ["sqlite", "dep:redis", "dep:r2d2", "dep:rustls"]
+default = ["server"]
+server = ["dep:axum", "dep:tokio"]
 
 [dependencies]
-data-encoding = "2.9"
-ed25519-dalek = "2.2"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-sha2 = "0.10"
-sha3 = "0.10"
-rusqlite = { version = "0.40", features = ["bundled"], optional = true }
-blind-rsa-signatures = { version = "0.17.2", default-features = false, optional = true }
-getrandom = { version = "0.4", optional = true }
-zeroize = { version = "1.8", optional = true }
-chacha20poly1305 = { version = "0.10.1", default-features = false, features = ["alloc"], optional = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = { version = "0.2", optional = true }
-js-sys = { version = "0.3", optional = true }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+schemars = "1"
+ts-rs = "12"
+url = "2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-libsql = { version = "0.9.30", optional = true, default-features = false, features = ["remote", "tls"] }
-url = { version = "2.5", optional = true }
-openssl = { version = "0.10", optional = true }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "json", "tokio"] }
-tokio = { version = "1", optional = true, features = ["rt-multi-thread", "sync", "time", "net", "macros"] }
-redis = { version = "1.7", optional = true, default-features = false, features = ["script", "tls-rustls", "tls-rustls-webpki-roots"] }
-r2d2 = { version = "0.8", optional = true }
-rustls = { version = "0.23", optional = true, default-features = false, features = ["std", "ring", "tls12"] }
-
-[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-getrandom = { version = "0.4", features = ["wasm_js"], optional = true }
+tokio = { version = "1", optional = true, features = ["rt", "time", "sync", "net", "macros"] }
 
 [dev-dependencies]
-tempfile = "3"
 tower = { version = "0.5", features = ["util"] }
+http-body-util = "0.1"
+futures-util = "0.3"
 
-[[example]]
-name = "browser_fixture"
-required-features = ["permit-issuer"]
-
-[[example]]
-name = "account_ledger_fixture"
-required-features = ["sqlite"]
+[target.'cfg(target_arch = "wasm32")'.dev-dependencies]
+wasm-bindgen-test = "0.3"

@@ -1,63 +1,12 @@
 {
-  "name": "cfrm",
-  "version": "0.1.0-alpha.0",
+  "name": "@corbet-labs/cfrm",
+  "version": "0.2.0",
   "private": true,
-  "description": "Ephemeral onion rendezvous and experiments for numerical participation rules",
   "type": "module",
-  "exports": {
-    "./rendezvous": "./src/rendezvous.js",
-    "./experiments": "./src/simulate.js",
-    "./profiles": "./browser/profiles/index.js",
-    "./accounting": "./runtime/accounting/index.mjs",
-    "./accounting/node-verifier": "./runtime/accounting/node-verifier.mjs",
-    "./accounting/enrollment-node": "./runtime/accounting/enrollment-service.mjs",
-    "./accounting/enrollment-store": "./runtime/accounting/enrollment-store.mjs",
-    "./accounting/enrollment-turso": "./runtime/accounting/enrollment-turso.mjs"
-  },
-  "engines": {
-    "node": ">=24"
-  },
-  "dependencies": {
-    "@aztec/bb.js": "5.0.0",
-    "@noir-lang/noir_js": "1.0.0-beta.26",
-    "@libsql/client": "0.18.0"
-  },
+  "description": "Generated Forum API types",
   "files": [
-    "src/*.js",
-    "browser/profiles/*.js",
-    "runtime/accounting/README.md",
-    "LICENSE.md",
-    "runtime/accounting/index.mjs",
-    "runtime/accounting/runtime.mjs",
-    "runtime/accounting/artifacts.mjs",
-    "runtime/accounting/checkpoint.mjs",
-    "runtime/accounting/client.mjs",
-    "runtime/accounting/encoding.mjs",
-    "runtime/accounting/enrollment.mjs",
-    "runtime/accounting/enrollment-client.mjs",
-    "runtime/accounting/enrollment-service.mjs",
-    "runtime/accounting/enrollment-publication.mjs",
-    "runtime/accounting/enrollment-store.mjs",
-    "runtime/accounting/hashes.mjs",
-    "runtime/accounting/node-verifier.mjs",
-    "runtime/accounting/peer-witness.mjs",
-    "runtime/accounting/peer-verifier.mjs",
-    "runtime/accounting/peer-prover.mjs",
-    "runtime/accounting/actor.mjs",
-    "runtime/accounting/actor-signing.mjs",
-    "runtime/accounting/actor-storage.mjs",
-    "runtime/accounting/primitives.mjs",
-    "runtime/accounting/witness.mjs",
-    "runtime/accounting/enrollment-turso.mjs"
+    "generated/client.ts",
+    "LICENSE.md"
   ],
-  "scripts": {
-    "test": "node --test test/*.test.js",
-    "experiment": "node experiments/run.js",
-    "sweep": "node experiments/run.js --sweep"
-  },
-  "license": "SEE LICENSE IN LICENSE.md",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/corbet-libs/cfrm.git"
-  }
+  "license": "SEE LICENSE IN LICENSE.md"
 }
