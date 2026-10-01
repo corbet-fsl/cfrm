@@ -15,7 +15,9 @@ dto!(Possession { session: Vec<u8>, request_nonce: Vec<u8>, signature: Vec<u8> }
 dto!(EnterInput { challenge: Vec<u8>, signature: Vec<u8>, publication: Vec<u8>, record_proof: Vec<u8> });
 dto!(ReplaceInput { possession: Possession, expected_revision: Vec<u8>, publication: Vec<u8>, record_proof: Vec<u8> });
 dto!(HeartbeatInput { possession: Possession, expected_revision: Vec<u8> });
-dto!(DepartInput { possession: Possession });
+dto!(DepartInput {
+    possession: Possession
+});
 dto!(SearchInput { possession: Possession, cursor: Option<Vec<u8>>, page_size: u16 });
 dto!(WatchInput { possession: Possession, cursor: Vec<u8> });
 dto!(CiphertextInput { possession: Possession, owner: Vec<u8>, revision: Vec<u8> });
@@ -23,7 +25,11 @@ dto!(CiphertextInput { possession: Possession, owner: Vec<u8>, revision: Vec<u8>
 dto!(RoomInput { possession: Possession, command: Vec<u8> });
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
-pub enum Requirement { Credential, DeviceChallenge, CurrentDeviceSession }
+pub enum Requirement {
+    Credential,
+    DeviceChallenge,
+    CurrentDeviceSession,
+}
 
 pub struct ActionInfo {
     pub name: &'static str,
@@ -82,7 +88,10 @@ actions! {
     RoomHandover => "room_handover" (RoomInput) CurrentDeviceSession,
 }
 
-dto!(Call { version: u16, request: Request });
+dto!(Call {
+    version: u16,
+    request: Request
+});
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
@@ -101,12 +110,21 @@ pub enum ErrorCode {
 dto!(Failure { error: ErrorCode });
 
 impl Call {
-    pub fn new(request: Request) -> Self { Self { version: 1, request } }
+    pub fn new(request: Request) -> Self {
+        Self {
+            version: 1,
+            request,
+        }
+    }
 
     pub fn decode(bytes: &[u8], maximum: usize) -> Result<Self, ErrorCode> {
-        if bytes.len() > maximum { return Err(ErrorCode::TooLarge); }
+        if bytes.len() > maximum {
+            return Err(ErrorCode::TooLarge);
+        }
         let call: Self = serde_json::from_slice(bytes).map_err(|_| ErrorCode::InvalidRequest)?;
-        if call.version != 1 { return Err(ErrorCode::UnsupportedVersion); }
+        if call.version != 1 {
+            return Err(ErrorCode::UnsupportedVersion);
+        }
         Ok(call)
     }
 }
@@ -123,7 +141,11 @@ pub fn openapi() -> Value {
         paths.insert(format!("/v1/{}", action.name), json!({"post": {
             "operationId": action.name,
             "x-authority": action.requirement,
-            "requestBody": {"required":true,"content":{"application/json":{"schema":schema::<Call>()}}},
+            "requestBody": {"required":true,"content":{"application/json":{"schema":{
+                "allOf":[schema::<Call>(),{"properties":{
+                    "version":{"const":1},"request":{"properties":{"action":{"const":action.name}}}
+                }}]
+            }}}},
             "responses":{"503":{"description":"Required current authority unavailable","content":{"application/json":{"schema":schema::<Failure>()}}}}
         }}));
     }
@@ -131,9 +153,7 @@ pub fn openapi() -> Value {
 }
 
 fn schema<T: JsonSchema>() -> Value {
-    let settings = schemars::generate::SchemaSettings {
-        inline_subschemas: true,
-        ..Default::default()
-    };
+    let mut settings = schemars::generate::SchemaSettings::default();
+    settings.inline_subschemas = true;
     json!(settings.into_generator().into_root_schema_for::<T>())
 }

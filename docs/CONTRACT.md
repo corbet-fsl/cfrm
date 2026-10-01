@@ -8,6 +8,8 @@ One Rust action declaration generates request variants, route names, authority r
 
 Host and Origin must each occur exactly once and match explicit configured canonical values. Forwarded headers never grant authority. Body size, body receipt duration and concurrent parsing are bounded. Every returned response, including routing/method/parser failures, has Cache-Control: no-store. No request logger is installed. Credential-gated challenges precede device possession; a reusable bundle or credential is not a session proof.
 
+Configured hosts are parsed with a fixed HTTPS scheme, for which URL rejects empty hosts before returning success. A redundant post-parse absent-host branch was removed; empty-host regression vectors remain. This follows [URL's special-scheme host parser](https://github.com/servo/rust-url/blob/v2.5.8/url/src/parser.rs#L992), not a coverage exclusion. All reachable line and branch thresholds remain 100%.
+
 ## Current implementation boundary
 
 The transport currently returns only typed AuthorityUnavailable. This is an explicit fail-closed boundary, not working admission. No server success response exists yet; it must be added from child-owned capabilities to the same registry. Session challenge/nonce/deadline/body binding, fresh device possession, shared Throttle before proof work, current Assurance, verified public record, cpfl publication verification and anonymous Assembly permits remain required integration work. No alternative verifier is supplied.

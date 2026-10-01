@@ -8,5 +8,9 @@
     "generated/client.ts",
     "LICENSE.md"
   ],
-  "license": "SEE LICENSE IN LICENSE.md"
+  "license": "SEE LICENSE IN LICENSE.md",
+  "devDependencies": {
+    "typescript": ">=5",
+    "ajv": "^8"
+  }
 }

@@ -73,13 +73,23 @@ jobs:
     - uses: browser-actions/setup-chrome@v1
       with:
         install-chromedriver: true
+        chrome-version: stable
+      id: chrome
+    - name: Use the browser paired with the installed driver
+      env:
+        CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
+      run: "python3 - <<'PYTHON'\nimport json, os\nwith open('webdriver.json', 'w')\
+        \ as output:\n    json.dump({'goog:chromeOptions': {'binary': os.environ['CHROME_BINARY']}},\
+        \ output)\nPYTHON"
     - name: Execute portable wire vectors in Chrome
       run: wasm-pack test --headless --chrome --locked --no-default-features --lib
     - run: cargo run --locked --example export
     - uses: actions/setup-node@v4
       with:
         node-version: lts/*
-    - run: npx --yes --package typescript tsc --strict --noEmit --lib es2022,dom generated/client.ts
+    - run: npm ci --ignore-scripts --no-audit --no-fund
+    - run: npx --no-install tsc --strict --noEmit --lib es2022,dom generated/client.ts
+    - run: node .github/check-api.mjs
     - uses: actions/upload-artifact@v4
       with:
         name: generated-api
