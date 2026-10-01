@@ -13,6 +13,8 @@ jobs:
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
+    - name: Validate the committed dependency graph
+      run: python3 .github/check-first-party.py
     - uses: dtolnay/rust-toolchain@stable
     - uses: actions/setup-node@v4
       with:
@@ -53,6 +55,8 @@ jobs:
       with:
         components: rustfmt, clippy
     - uses: Swatinem/rust-cache@v2
+      with:
+        cache-on-failure: true
     - run: rustc --version
     - run: rustc --version
     - name: Check formatting and retain a repair patch
@@ -78,9 +82,8 @@ jobs:
     - name: Use the browser paired with the installed driver
       env:
         CHROME_BINARY: ${{ steps.chrome.outputs.chrome-path }}
-      run: "python3 - <<'PYTHON'\nimport json, os\nwith open('webdriver.json', 'w')\
-        \ as output:\n    json.dump({'goog:chromeOptions': {'binary': os.environ['CHROME_BINARY']}},\
-        \ output)\nPYTHON"
+      run: "python3 - <<'PYTHON'\nimport json, os\nwith open('webdriver.json', 'w') as output:\n    json.dump({'goog:chromeOptions':\
+        \ {'binary': os.environ['CHROME_BINARY']}}, output)\nPYTHON"
     - name: Execute portable wire vectors in Chrome
       run: wasm-pack test --headless --chrome --locked --no-default-features --lib
     - run: cargo run --locked --example export
@@ -142,14 +145,15 @@ jobs:
 
         cargo llvm-cov --version'
     - name: Measure real native round trips and failure paths
-      run: cargo llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage
-        --no-cfg-coverage-nightly --ignore-filename-regex "/tests/" --json --output-path
-        coverage.json
+      run: cargo llvm-cov --locked --workspace --all-features --branch --no-cfg-coverage --no-cfg-coverage-nightly
+        --ignore-filename-regex "/tests/" --json --output-path coverage.json
     - name: Export exact line and branch locations
-      run: cargo llvm-cov report --locked --branch --ignore-filename-regex '/tests/'
-        --lcov --output-path coverage.lcov
+      run: cargo llvm-cov report --locked --branch --ignore-filename-regex '/tests/' --lcov --output-path
+        coverage.lcov
+    - name: Export companion source line inventory
+      run: cargo llvm-cov report --locked --branch --ignore-filename-regex '/tests/' --text > coverage.txt
     - name: Require complete line and branch coverage
-      run: python3 .github/check-coverage.py coverage.lcov coverage.json
+      run: python3 .github/check-coverage.py coverage.lcov coverage.json coverage.txt
     - uses: actions/upload-artifact@v4
       if: always()
       with:
@@ -160,7 +164,9 @@ jobs:
 
           Cargo.lock
 
-          resolver.txt'
+          resolver.txt
+
+          coverage.txt'
         retention-days: 7
 'on':
   push:

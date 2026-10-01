@@ -8,7 +8,7 @@ Compose Assurance, Gather and Volatile through one versioned Rust action registr
 
 ## Current state
 
-The registry, generated TypeScript/OpenAPI/MCP and bounded HTTP/client refusal transport are implemented; current scope changes are undergoing CI. **Every action currently returns AuthorityUnavailable.** There is no accepting admission stub and no deployed forum. Current child capability integration, proof-bound sessions, policy-supplied minimum client version, authenticated MCP hosting and live discovery remain incomplete. The MCP projection and raw-argument dispatcher do not expose an unauthenticated service.
+The registry, generated TypeScript/OpenAPI/MCP and bounded HTTP/client refusal transport are implemented. **Every action currently returns AuthorityUnavailable.** There is no accepting admission stub and no deployed forum. Current child capability integration, proof-bound sessions, policy-supplied minimum client version, authenticated MCP hosting and live discovery remain incomplete. The MCP projection and raw-argument dispatcher do not expose an unauthenticated service.
 
 The former identity, accounting and SQL service implementation has been removed from the Rust door. Historical experiments are research only and are not a service or acceptance evidence. Existing bounded-body, concurrency, timeout and no-logging HTTP mechanisms informed the new adapter; current authorization belongs to the owning libraries.
 

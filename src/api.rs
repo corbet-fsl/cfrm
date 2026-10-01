@@ -169,7 +169,11 @@ pub fn mcp_tools() -> Value {
 
 /// Arguments are original JSON bytes, not a pre-decoded map that lost duplicate
 /// fields. Missing current authority refuses exactly as the HTTP/Rust path does.
-pub fn execute_tool(name: &str, arguments: &[u8], maximum: usize) -> Result<std::convert::Infallible, ErrorCode> {
+pub fn execute_tool(
+    name: &str,
+    arguments: &[u8],
+    maximum: usize,
+) -> Result<std::convert::Infallible, ErrorCode> {
     let call = Call::decode(arguments, maximum)?;
     if call.request.info().name != name {
         return Err(ErrorCode::InvalidRequest);

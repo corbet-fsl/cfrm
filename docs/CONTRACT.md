@@ -14,7 +14,12 @@ Configured hosts are parsed with a fixed HTTPS scheme, for which URL rejects emp
 
 The transport currently returns only typed AuthorityUnavailable. This is an explicit fail-closed boundary, not working admission. No server success response exists yet; it must be added from child-owned capabilities to the same registry. Session challenge/nonce/deadline/body binding, fresh device possession, shared Throttle before proof work, current Assurance, verified public record, cpfl publication verification and anonymous Assembly permits remain required integration work. No alternative verifier is supplied.
 
-Switchboard owns the authoritative attendance generation. Lookup owns derived indexes and opaque expiring cursor positions; each page, delta and ciphertext read must recheck both current entries, trust and reciprocal Guard rules. Only committed entries may become candidates. Assembly owns all room state, anonymous permit checking and order recovery. Gather routes these children; Forum stores no domain records. Storage is one service-owned cvtl handle per service, with fresh incarnation on restart.
+Switchboard owns the authoritative attendance generation. Lookup owns derived indexes and opaque expiring cursor positions; each page, delta and ciphertext read must recheck both current entries, trust and reciprocal Guard rules. Only committed entries may become candidates. Assembly owns all room state, anonymous permit checking and order recovery. Gather routes these children; Forum stores no domain records. Storage is one configured cvtl scope per community rollout, shared across its
+serverless instances. Cold starts retain that rollout incarnation; a coordinated
+service reset or Valkey restart rotates it before admission can resume. The door
+must supervise mutation completion and explicit reopen/reconciliation independently
+of request cancellation; see [the Valkey deployment contract](https://github.com/corbet-foss/cvlk/blob/main/docs/CONTRACT.md#deployment-incarnation-and-request-supervision).
+No deployed incarnation controller or accepting integration is claimed yet.
 
 ## Acceptance still open
 
@@ -41,3 +46,15 @@ This is a projection and dispatch port, not an authenticated MCP listener.
 Production hosting, session custody and the policy-supplied client version floor
 remain blocked on the same verified owner capabilities as HTTP admission. No
 request may skip those checks merely because it arrived through MCP.
+
+G1 credential/Guard checks belong to `cgrd::check_published`, referenced through
+Charter and Assurance. Envoy (`cnvy`) fetches/follows feeds; it does not verify
+authority. Concrete G2 public-record and G3 device capabilities must be composed
+with those current owner checks before any admission succeeds. No second verifier
+or optional check is introduced here.
+
+The first publishing root for each community comes only from deployment
+configuration. Feed responses cannot provide their own initial authority. Charter
+verifies signed ring continuity and nondecreasing revision floors; Envoy only
+fetches. These owner ports must be integrated before the door can leave its
+current AuthorityUnavailable state.

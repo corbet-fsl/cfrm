@@ -68,8 +68,14 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
             assert_eq!(request.info().requirement, Requirement::AnonymousRoomPass);
         }
         let bytes = serde_json::to_vec(&Call::new(request)).unwrap();
-        assert_eq!(execute_tool(name, &bytes, 4096), Err(ErrorCode::AuthorityUnavailable));
-        assert_eq!(execute_tool("unknown", &bytes, 4096), Err(ErrorCode::InvalidRequest));
+        assert_eq!(
+            execute_tool(name, &bytes, 4096),
+            Err(ErrorCode::AuthorityUnavailable)
+        );
+        assert_eq!(
+            execute_tool("unknown", &bytes, 4096),
+            Err(ErrorCode::InvalidRequest)
+        );
         let decoded = Call::decode(&bytes, 4096).unwrap();
         assert_eq!(decoded.request.info().name, name);
         assert!(matches!(
@@ -97,7 +103,10 @@ fn wire_decoder_refuses_duplicate_unknown_and_unbounded_input() {
         br#"{"version":1,"request":{"action":"unknown","input":{}}}"#,
         br#"{"version":1,"request":{"action":"challenge","input":{"credential":[256]}}}"#,
     ] {
-        assert_eq!(execute_tool("challenge", bytes, 4096), Err(ErrorCode::InvalidRequest));
+        assert_eq!(
+            execute_tool("challenge", bytes, 4096),
+            Err(ErrorCode::InvalidRequest)
+        );
         assert!(matches!(
             Call::decode(bytes, 4096),
             Err(ErrorCode::InvalidRequest)
@@ -116,7 +125,16 @@ fn wire_decoder_refuses_duplicate_unknown_and_unbounded_input() {
 #[cfg_attr(not(target_arch = "wasm32"), test)]
 fn room_api_refuses_authenticated_presence_bindings() {
     let bytes=br#"{"version":1,"request":{"action":"room_order","input":{"possession":{"session":[1],"request_nonce":[2],"signature":[3]},"room_pass":[4],"command":[5]}}}"#;
-    assert!(matches!(Call::decode(bytes,4096),Err(ErrorCode::InvalidRequest)));
-    assert_eq!(execute_tool("room_order",bytes,4096),Err(ErrorCode::InvalidRequest));
-    assert_eq!(execute_tool("challenge", &[0;8],7),Err(ErrorCode::TooLarge));
+    assert!(matches!(
+        Call::decode(bytes, 4096),
+        Err(ErrorCode::InvalidRequest)
+    ));
+    assert_eq!(
+        execute_tool("room_order", bytes, 4096),
+        Err(ErrorCode::InvalidRequest)
+    );
+    assert_eq!(
+        execute_tool("challenge", &[0; 8], 7),
+        Err(ErrorCode::TooLarge)
+    );
 }
