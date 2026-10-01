@@ -9,14 +9,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
     - name: Validate the committed dependency graph
       run: python3 .github/check-first-party.py
     - uses: dtolnay/rust-toolchain@stable
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: lts/*
     - name: Resolve one fresh dependency snapshot
@@ -31,7 +31,7 @@ jobs:
         sha256sum Cargo.lock >> resolver.txt
 
         npm install --package-lock-only --ignore-scripts --no-audit --no-fund'
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: resolved-lock
         path: 'Cargo.lock
@@ -44,11 +44,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: resolved-lock
     - uses: dtolnay/rust-toolchain@stable
@@ -64,7 +64,7 @@ jobs:
 
         git diff --exit-code -- ''*.rs'' > format.patch'
       continue-on-error: false
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       if: failure()
       with:
         name: format
@@ -74,7 +74,7 @@ jobs:
     - uses: taiki-e/install-action@v2
       with:
         tool: wasm-pack
-    - uses: browser-actions/setup-chrome@v1
+    - uses: browser-actions/setup-chrome@v2
       with:
         install-chromedriver: true
         chrome-version: stable
@@ -87,13 +87,13 @@ jobs:
     - name: Execute portable wire vectors in Chrome
       run: wasm-pack test --headless --chrome --locked --no-default-features --lib
     - run: cargo run --locked --example export
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v7
       with:
         node-version: lts/*
     - run: npm ci --ignore-scripts --no-audit --no-fund
     - run: npx --no-install tsc --strict --noEmit --lib es2022,dom generated/client.ts
     - run: node .github/check-api.mjs
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: generated-api
         path: generated/
@@ -103,11 +103,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: resolved-lock
     - run: python3 .github/check-first-party.py
@@ -124,11 +124,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
       with:
         ref: ${{ github.event.pull_request.head.sha || github.sha }}
         persist-credentials: false
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v8
       with:
         name: resolved-lock
     - uses: dtolnay/rust-toolchain@nightly
@@ -154,7 +154,7 @@ jobs:
       run: cargo llvm-cov report --locked --branch --ignore-filename-regex '/tests/' --text > coverage.txt
     - name: Require complete line and branch coverage
       run: python3 .github/check-coverage.py coverage.lcov coverage.json coverage.txt
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       if: always()
       with:
         name: coverage
