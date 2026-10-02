@@ -4,7 +4,46 @@ Authenticated, ephemeral forum API. All frontends use the member door; Forum exp
 
 ## Scope
 
-Compose Assurance, Gather and Volatile through one versioned Rust action registry, projected into HTTP/OpenAPI, TypeScript and MCP. Require current credential, device possession, whole-profile Guard validation and local public-record verification. Hold no permanent member state, profile keys, accounting ledger or request log. Every success and refusal must be noncacheable; exact configured host and origin checks precede bounded body parsing. Link owns both connection classes: authenticated device sessions for presence/search and unlinkable anonymous room-pass sessions for Assembly. Room requests carry no presence credentials. The door owns no evaluator, quota algorithm, room protocol, compression or storage beyond its single Volatile handle.
+### Purpose
+
+cfrm is the ephemeral meeting place of admitted community members, exposing an authenticated-member API over Assurance, Gather and Volatile that leaves no permanent trace.
+
+### Owns
+
+- The single versioned action definition of the forum API, projected into HTTP/OpenAPI and a generated TypeScript client.
+- Composition of the Assurance, Gather and Volatile facades, with exactly one service-owned storage connection through cvtl.
+- Refusal of every unauthenticated request.
+- Publication of the minimum client version below which clients refuse to run.
+- Cheap rejection and per-community quotas before expensive work, including cutting off a community with excessive issues without affecting other communities.
+- Serverless operation against managed expiring storage, deployable independently of cvld.
+
+### Never
+
+- Keeps a permanent trace: no durable store, backups, request or body logs, or IP and login-time records.
+- Holds credential material or SQL storage handles.
+- Queries cvld about a member at runtime or performs cvld work.
+- Accepts or forwards admin or root edits.
+- Serves any client other than the member door.
+- Compresses data.
+- Sees private plaintext, profile keys, or message content.
+- Runs an onion service or depends on Tor on the server side.
+- Adds paid tiers or automatic billing.
+- Holds domain logic in the door itself; the door only wires facades.
+- Grows a separate protocol or statement library.
+
+### States
+
+Service lifecycle only: Starting to Ready, or Refused/Unavailable. All domain state is derived from the facades, and a restart forgets every member.
+
+### Test obligations
+
+- Unauthenticated, foreign-community, and replayed requests cannot read forum state or invoke domain work, and cheap quota checks run before verification.
+- Authentication requires a valid community credential and proven device possession before granting anything, without revealing member data.
+- Member traffic never causes a member query to cvld; only trust feed updates are fetched.
+- A restart forgets all member state, and the Memory and disposable Valkey backends pass the same forum scenario.
+- Generated HTTP, OpenAPI, and TypeScript stay in parity, with non-cacheable successes and errors and exact origin and host checks.
+- Retained server state after a scenario is limited to the approved public projection, ciphertext, and expiring derived state, with no IPs, history, private plaintext, or keys.
+- Request floods are refused before storage or proof work, and one community at quota does not make another community unusable.
 
 ## Current state
 
