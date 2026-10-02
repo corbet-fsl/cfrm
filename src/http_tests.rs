@@ -14,7 +14,7 @@ fn limits() -> Limits {
 }
 fn call() -> Call {
     Call::new(crate::Request::Challenge(ChallengeInput {
-        credential: vec![1, 2, 3],
+        publication: vec![1, 2, 3],
     }))
 }
 fn request(path: &str, body: impl Into<Body>) -> Request {
@@ -39,7 +39,7 @@ async fn all_actions_are_registry_derived_and_no_authority_can_be_fabricated() {
     let ts = typescript();
     let spec = openapi();
     let info = actions();
-    assert_eq!(info.len(), 12);
+    assert_eq!(info.len(), 19);
     for action in info {
         assert!(ts.contains(action.name));
         assert!((action.input_schema)().is_object());
@@ -122,9 +122,9 @@ async fn exact_origin_host_media_and_duplicate_header_checks_precede_body_work()
 async fn size_version_json_timeout_and_concurrency_are_bounded() {
     let app = router(limits()).unwrap();
     for (body,error) in [(vec![0;4097],ErrorCode::TooLarge),(b"bad".to_vec(),ErrorCode::InvalidRequest),
-        (br#"{"version":2,"request":{"action":"challenge","input":{"credential":[]}}}"#.to_vec(),ErrorCode::UnsupportedVersion),
-        (br#"{"version":1,"request":{"action":"challenge","input":{"credential":[],"extra":true}}}"#.to_vec(),ErrorCode::InvalidRequest),
-        (br#"{"version":1,"version":1,"request":{"action":"challenge","input":{"credential":[]}}}"#.to_vec(),ErrorCode::InvalidRequest)] {
+        (br#"{"version":2,"request":{"action":"challenge","input":{"publication":[]}}}"#.to_vec(),ErrorCode::UnsupportedVersion),
+        (br#"{"version":1,"request":{"action":"challenge","input":{"publication":[],"extra":true}}}"#.to_vec(),ErrorCode::InvalidRequest),
+        (br#"{"version":1,"version":1,"request":{"action":"challenge","input":{"publication":[]}}}"#.to_vec(),ErrorCode::InvalidRequest)] {
         assert_eq!(result(app.clone().oneshot(request("/v1/challenge",body)).await.unwrap()).await,error);
     }
     let pending = Body::from_stream(futures_util::stream::pending::<
@@ -142,6 +142,7 @@ async fn size_version_json_timeout_and_concurrency_are_bounded() {
     let config = Arc::new(Config {
         limits: limits(),
         concurrent: Semaphore::new(0),
+        controller: None,
     });
     assert_eq!(
         result(handle(State(config), request("/v1/challenge", Body::empty())).await).await,
@@ -237,4 +238,93 @@ async fn generated_rust_client_uses_real_http_refusal_without_domain_stubs() {
             .await,
         Err(ErrorCode::Transport)
     ));
+}
+
+#[tokio::test]
+async fn browser_preflight_is_exact_scoped_and_does_not_share_credentials() {
+    let app = router(limits()).unwrap();
+    let preflight = || {
+        Request::builder()
+            .method("OPTIONS")
+            .uri("/v1/challenge")
+            .header(header::HOST, "api.example.test")
+            .header(header::ORIGIN, "https://example.test")
+            .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+            .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "Content-Type")
+            .body(Body::empty())
+            .unwrap()
+    };
+    let response = app.clone().oneshot(preflight()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.headers()[header::CACHE_CONTROL], "no-store");
+    assert_eq!(
+        response.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN],
+        "https://example.test"
+    );
+    assert_eq!(
+        response.headers()[header::ACCESS_CONTROL_ALLOW_HEADERS],
+        "content-type"
+    );
+    assert_eq!(
+        response.headers()[header::ACCESS_CONTROL_ALLOW_METHODS],
+        "POST"
+    );
+    assert!(
+        response
+            .headers()
+            .get(header::ACCESS_CONTROL_ALLOW_CREDENTIALS)
+            .is_none()
+    );
+    for (name, value, expected) in [
+        (header::HOST, "foreign.test", ErrorCode::Host),
+        (header::ORIGIN, "https://foreign.test", ErrorCode::Origin),
+        (
+            header::ACCESS_CONTROL_REQUEST_METHOD,
+            "GET",
+            ErrorCode::InvalidRequest,
+        ),
+        (
+            header::ACCESS_CONTROL_REQUEST_HEADERS,
+            "content-type, authorization",
+            ErrorCode::InvalidRequest,
+        ),
+    ] {
+        let mut req = preflight();
+        req.headers_mut().insert(name, value.parse().unwrap());
+        assert_eq!(
+            result(app.clone().oneshot(req).await.unwrap()).await,
+            expected
+        );
+    }
+    for name in [
+        header::ACCESS_CONTROL_REQUEST_METHOD,
+        header::ACCESS_CONTROL_REQUEST_HEADERS,
+    ] {
+        for duplicate in [false, true] {
+            let mut req = preflight();
+            if duplicate {
+                let value = req.headers()[&name].clone();
+                req.headers_mut().append(&name, value);
+            } else {
+                req.headers_mut().remove(&name);
+            }
+            assert_eq!(
+                result(app.clone().oneshot(req).await.unwrap()).await,
+                ErrorCode::InvalidRequest
+            );
+        }
+    }
+    let response = app
+        .oneshot(request(
+            "/v1/challenge",
+            serde_json::to_vec(&call()).unwrap(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(
+        response.headers()[header::ACCESS_CONTROL_ALLOW_ORIGIN],
+        "https://example.test"
+    );
+    assert_eq!(response.headers()[header::VARY], "Origin");
+    assert_eq!(result(response).await, ErrorCode::AuthorityUnavailable);
 }

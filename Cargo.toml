@@ -9,7 +9,15 @@ publish = false
 
 [features]
 default = ["server"]
-server = ["dep:axum", "dep:tokio"]
+client-http = ["dep:reqwest"]
+client-browser = ["dep:gloo-timers", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys"]
+server = ["dep:axum", "dep:tokio", "dep:cgth", "dep:csrn", "dep:cvtl", "dep:cshm"]
+serve = ["server", "csrn/http", "dep:clap", "dep:getrandom", "dep:redis", "tokio/signal"]
+
+[[bin]]
+name = "cfrm"
+path = "src/main.rs"
+required-features = ["serve"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"] }
@@ -17,12 +25,30 @@ serde_json = "1"
 schemars = "1"
 ts-rs = "12"
 url = "2"
+crbk = { git = "https://github.com/corbet-foss/crbk", branch = "main" }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+clap = { version = "4", features = ["derive"], optional = true }
+getrandom = { version = "0.4", optional = true }
+redis = { version = "1", default-features = false, features = ["tokio-comp"], optional = true }
+reqwest = { version = "0.12", optional = true, default-features = false, features = ["rustls-tls"] }
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "json", "tokio"] }
 tokio = { version = "1", optional = true, features = ["rt", "time", "sync", "net", "macros"] }
 
+cgth = { git = "https://github.com/corbet-libs/cgth", branch = "main", features = ["issuer"], optional = true }
+csrn = { git = "https://github.com/corbet-libs/csrn", branch = "main", optional = true }
+cvtl = { git = "https://github.com/corbet-libs/cvtl", branch = "main", optional = true }
+cshm = { git = "https://github.com/corbet-foss/cshm", branch = "main", optional = true }
+
 [dev-dependencies]
+cnvl = { git = "https://github.com/corbet-foss/cnvl", branch = "main" }
+cchr = { git = "https://github.com/corbet-foss/cchr", branch = "main" }
+cpfl = { git = "https://github.com/corbet-foss/cpfl", branch = "main" }
+cgrd = { git = "https://github.com/corbet-foss/cgrd", branch = "main", default-features = false }
+ckmg = { git = "https://github.com/corbet-foss/ckmg", branch = "main" }
+cwst = { git = "https://github.com/corbet-foss/cwst", branch = "main" }
+csgn = { git = "https://github.com/corbet-foss/csgn", branch = "main", default-features = false, features = ["volatile-signer"] }
+ed25519-dalek = { version = "3", default-features = false, features = ["fast"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
 futures-util = "0.3"
@@ -32,3 +58,10 @@ wasm-bindgen-test = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 rmcp = { version = "3", default-features = false, features = ["server"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+gloo-timers = { version = "0.3", optional = true }
+web-sys = { version = "0.3", features = ["AbortController", "AbortSignal", "Headers", "Request", "RequestInit", "RequestMode", "Response", "Window", "Location", "ReadableStream", "ReadableStreamDefaultReader", "RequestRedirect", "RequestCredentials", "RequestCache", "ReferrerPolicy"], optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+wasm-bindgen-futures = { version = "0.4", optional = true }
+js-sys = { version = "0.3", optional = true }

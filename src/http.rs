@@ -21,9 +21,24 @@ pub struct Limits {
 struct Config {
     limits: Limits,
     concurrent: Semaphore,
+    controller: Option<crate::runtime::Handle>,
 }
 
 pub fn router(limits: Limits) -> Result<Router, ErrorCode> {
+    configured(limits, None)
+}
+
+pub fn router_with(
+    limits: Limits,
+    controller: crate::runtime::Handle,
+) -> Result<Router, ErrorCode> {
+    configured(limits, Some(controller))
+}
+
+fn configured(
+    limits: Limits,
+    controller: Option<crate::runtime::Handle>,
+) -> Result<Router, ErrorCode> {
     if limits.hosts.is_empty()
         || limits.origins.is_empty()
         || limits.body_bytes == 0
@@ -55,11 +70,15 @@ pub fn router(limits: Limits) -> Result<Router, ErrorCode> {
     }
     let state = Arc::new(Config {
         concurrent: Semaphore::new(limits.concurrent),
+        controller,
         limits,
     });
     let mut router = Router::new();
     for action in actions() {
-        router = router.route(&format!("/v1/{}", action.name), post(handle));
+        router = router.route(
+            &format!("/v1/{}", action.name),
+            post(handle).options(preflight),
+        );
     }
     Ok(router
         .fallback(|| async { reject(ErrorCode::InvalidRequest) })
@@ -102,6 +121,61 @@ async fn handle(State(config): State<Arc<Config>>, request: Request) -> Response
     if !exact_header(&request, header::ORIGIN, &config.limits.origins) {
         return reject(ErrorCode::Origin);
     }
+    let origin = request.headers()[header::ORIGIN].clone();
+    cors(origin, handle_allowed(config, request).await)
+}
+
+fn cors(origin: axum::http::HeaderValue, mut response: Response) -> Response {
+    response
+        .headers_mut()
+        .insert(header::ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+    response
+        .headers_mut()
+        .insert(header::VARY, axum::http::HeaderValue::from_static("Origin"));
+    response
+}
+
+async fn preflight(State(config): State<Arc<Config>>, request: Request) -> Response {
+    if !exact_header(&request, header::HOST, &config.limits.hosts) {
+        return reject(ErrorCode::Host);
+    }
+    if !exact_header(&request, header::ORIGIN, &config.limits.origins) {
+        return reject(ErrorCode::Origin);
+    }
+    let origin = request.headers()[header::ORIGIN].clone();
+    if !exact_header(
+        &request,
+        header::ACCESS_CONTROL_REQUEST_METHOD,
+        &["POST".into()],
+    ) {
+        return cors(origin, reject(ErrorCode::InvalidRequest));
+    }
+    let mut headers = request
+        .headers()
+        .get_all(header::ACCESS_CONTROL_REQUEST_HEADERS)
+        .iter();
+    let valid = headers
+        .next()
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|value| value.trim().eq_ignore_ascii_case("content-type"));
+    if !valid || headers.next().is_some() {
+        return cors(origin, reject(ErrorCode::InvalidRequest));
+    }
+    cors(
+        origin,
+        (
+            StatusCode::NO_CONTENT,
+            [
+                (header::CACHE_CONTROL, "no-store"),
+                (header::ACCESS_CONTROL_ALLOW_METHODS, "POST"),
+                (header::ACCESS_CONTROL_ALLOW_HEADERS, "content-type"),
+            ],
+        )
+            .into_response(),
+    )
+}
+
+async fn handle_allowed(config: Arc<Config>, request: Request) -> Response {
     if !exact_header(&request, header::CONTENT_TYPE, &["application/json".into()]) {
         return reject(ErrorCode::MediaType);
     }
@@ -109,6 +183,10 @@ async fn handle(State(config): State<Arc<Config>>, request: Request) -> Response
         return reject(ErrorCode::Capacity);
     };
     let path = request.uri().path().to_owned();
+    let origin = request.headers()[header::ORIGIN]
+        .to_str()
+        .expect("validated exact origin")
+        .to_owned();
     let bytes = match tokio::time::timeout(
         config.limits.body_timeout,
         to_bytes(request.into_body(), config.limits.body_bytes),
@@ -126,9 +204,13 @@ async fn handle(State(config): State<Arc<Config>>, request: Request) -> Response
     if path != format!("/v1/{}", call.request.info().name) {
         return reject(ErrorCode::InvalidRequest);
     }
-    match execute(&call) {
+    let result = match &config.controller {
+        Some(controller) => controller.execute(origin, call).await,
+        None => execute(&call),
+    };
+    match result {
         Err(error) => reject(error),
-        Ok(impossible) => match impossible {},
+        Ok(reply) => ([(header::CACHE_CONTROL, "no-store")], axum::Json(reply)).into_response(),
     }
 }
 

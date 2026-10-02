@@ -12,23 +12,39 @@ Configured hosts are parsed with a fixed HTTPS scheme, for which URL rejects emp
 
 ## Current implementation boundary
 
-The transport currently returns only typed AuthorityUnavailable. This is an explicit fail-closed boundary, not working admission. No server success response exists yet; it must be added from child-owned capabilities to the same registry. Session challenge/nonce/deadline/body binding, fresh device possession, shared Throttle before proof work, current Assurance, verified public record, cpfl publication verification and anonymous Assembly permits remain required integration work. No alternative verifier is supplied.
+The candidate `runtime::Service` composes one Volatile handle, current Assurance,
+and actual Gather children. `spawn` returns a concrete bounded Handle and worker;
+queued mutations complete after caller cancellation, and worker drop/panic fences
+the shared store. `router_with` consumes that Handle, never an accepting callback.
+Challenge/enter/replace/heartbeat/depart/search/ciphertext delegate owner authority.
+The unsigned request transcript includes the canonical versioned action and every
+input except its signature. Ciphertext's requested Profile revision is eight-byte
+big-endian; attendance storage revisions are exact sixteen-byte tokens.
 
-Switchboard owns the authoritative attendance generation. Lookup owns derived indexes and opaque expiring cursor positions; each page, delta and ciphertext read must recheck both current entries, trust and reciprocal Guard rules. Only committed entries may become candidates. Assembly owns all room state, anonymous permit checking and order recovery. Gather routes these children; Forum stores no domain records. Storage is one configured cvtl scope per community rollout, shared across its
-serverless instances. Cold starts retain that rollout incarnation; a coordinated
-service reset or Valkey restart rotates it before admission can resume. The door
+The legacy router and static MCP refusal dispatcher remain unavailable without
+the actual controller. Watch now forwards bounded Lookup window deltas. Member MLS handover,
+the client version floor, generated artifacts and complete
+native/browser/coverage qualification remain open. No deployed acceptance is claimed.
+
+Switchboard owns the authoritative attendance generation. Lookup owns derived indexes and opaque expiring cursor positions; each page, delta and ciphertext read must recheck both current entries, trust and reciprocal Guard rules. Only committed entries may become candidates. Assembly owns all room state, anonymous permit checking and order recovery. Gather routes these children; Forum stores no domain records. Storage is one configured cvtl scope per community rollout. The reviewed MVP
+runs ONE issuer process per incarnation. Process loss or Valkey restart rotates
+the incarnation and common issuer key before admission can resume; no serverless
+cold-start key recreation is permitted under the old scope. The door
 must supervise mutation completion and explicit reopen/reconciliation independently
 of request cancellation; see [the Valkey deployment contract](https://github.com/corbet-foss/cvlk/blob/main/docs/CONTRACT.md#deployment-incarnation-and-request-supervision).
 No deployed incarnation controller or accepting integration is claimed yet.
 
 ## Acceptance still open
 
-Real trust/credential/profile/record/device round trips; replay, revocation and stale-generation denial through every generated surface; live typed pages/deltas and ciphertext refusal races; Memory/Valkey parity; no retained member state across restart; real anonymous room protocol; full line and branch coverage; security review. Refusal and transport tests establish none of the missing admission successes.
+Real trust/credential/profile/device round trips; replay, revocation and stale-generation denial through every generated surface; live typed pages/deltas and ciphertext refusal races; Memory/Valkey parity; no retained member state across restart; real anonymous room protocol; full line and branch coverage; security review. Refusal and transport tests establish none of the missing admission successes.
 
 ## Anonymous rooms and MCP
 
-Room inputs contain only the room owner's opaque pass and command. The registry
-marks them AnonymousRoomPass; they never include authenticated presence session
+Authenticated `room_epoch` and `room_issue` use CurrentDeviceSession and the
+original sealed Switchboard capability, with the original signed quota and common
+configured epoch. The latter carries only operation and original BlindRequest,
+never a room/hash/tag. All anonymous command inputs contain only the room owner's
+opaque pass and command. The registry marks those AnonymousRoomPass; they never include authenticated presence session
 credentials. Link owns both independent session classes. Assembly alone verifies
 permits; this projection does not define a blind-pass protocol or link rooms to
 members.
@@ -49,12 +65,39 @@ request may skip those checks merely because it arrived through MCP.
 
 G1 credential/Guard checks belong to `cgrd::check_published`, referenced through
 Charter and Assurance. Envoy (`cnvy`) fetches/follows feeds; it does not verify
-authority. Concrete G2 public-record and G3 device capabilities must be composed
-with those current owner checks before any admission succeeds. No second verifier
-or optional check is introduced here.
+authority. Current credential-bound device authority and per-request possession must be
+composed with those owner checks. The05:45 binding MVP correction restores G2
+frontier/ZK currentness and public punishment as requirements. Their original
+owner capabilities must be integrated before complete admission is claimed; no
+second verifier, optional check or accepting substitute is introduced here.
 
 The first publishing root for each community comes only from deployment
 configuration. Feed responses cannot provide their own initial authority. Charter
 verifies signed ring continuity and nondecreasing revision floors; Envoy only
 fetches. These owner ports must be integrated before the door can leave its
 current AuthorityUnavailable state.
+
+## Concrete client transport candidate
+
+HttpTransport and BrowserTransport use exact configured HTTPS origins, bounded
+request/streamed response bytes and a whole-response timeout. No cookies, redirect,
+referrer or automatic effect retry is used. Browser Fetch also validates its real
+application Origin and aborts the request/body reader on cancellation. Unknown
+outcomes require reconciliation. Cross-origin OPTIONS allows only POST with
+Content-Type for one exact configured origin and never enables shared credentials.
+These adapters are source candidates; actual HTTPS/browser round trips are still
+required. Axum in-process scenario tests are not presented as browser evidence.
+
+SearchOutput carries separate pagination `cursor` and bounded-window `watch`.
+WatchInput uses only the latter under a new current-device request. WatchOutput
+contains upserts, previously visible removed IDs, current pagination and a new
+watch cursor. Original Lookup owns every context, currentness and reciprocal
+check; the transport retains no second listing or event journal. Generated
+artifacts and these source paths still require actual native/browser CI.
+
+The 2026-10-02 05:45 binding MVP correction restores G2 frontier commitments and
+zero-knowledge currentness plus public punishment. Earlier record-disabled
+admission source is therefore NOT release-complete. The reserved record_proof
+input currently refuses nonempty data; original accounting/Guard/Charter capability
+integration is required before deploying or claiming MVP admission acceptance.
+No person-specific current-record lookup or accepting substitute is permitted.
