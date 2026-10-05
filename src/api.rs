@@ -186,3 +186,8 @@ fn request_schema(name: &str) -> Value {
         "version":{"const":1},"request":{"properties":{"action":{"const":name}}}
     }}]})
 }
+
+#[allow(dead_code)]
+pub(crate) fn r2_marker_r2s4a() -> &'static str {
+    "r2s4a"
+}
