@@ -1,0 +1,18 @@
+when:
+  - event: manual
+    branch: ci-bakeoff-fanout
+labels:
+  backend: local
+variables:
+  MODE:
+    default: prep
+  SCEN:
+    default: F0
+steps:
+  - name: measure
+    image: bash
+    environment:
+      FORGE_TOKEN:
+        from_secret: forge_token
+    commands:
+      - sh ci/bakeoff/fanout-worker.sh $MODE $SCEN
