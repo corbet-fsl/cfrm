@@ -1,0 +1,19 @@
+when:
+  - event: manual
+    branch: ci-bakeoff-buck2
+labels:
+  backend: local
+variables:
+  TOOL:
+    default: setup
+  MODE:
+    default: cold
+  RUN_ID:
+    default: setup
+  REAPI:
+    default: grpc://10.42.4.117:9092
+steps:
+  - name: measure
+    image: bash
+    commands:
+      - sh ci/buck2/run.sh

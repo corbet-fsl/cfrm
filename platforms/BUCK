@@ -1,0 +1,8 @@
+load(":defs.bzl", "cache_execution_platform")
+
+cache_execution_platform(
+    name = "default",
+    cpu_configuration = "prelude//cpu:x86_64",
+    os_configuration = "prelude//os:linux",
+    visibility = ["PUBLIC"],
+)

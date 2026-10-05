@@ -1,0 +1,34 @@
+load("@prelude//toolchains:cxx.bzl", "system_cxx_toolchain")
+load("@prelude//toolchains:genrule.bzl", "system_genrule_toolchain")
+load("@prelude//toolchains:python.bzl", "system_python_bootstrap_toolchain")
+load("@prelude//toolchains:rust.bzl", "system_rust_toolchain")
+load("@prelude//toolchains:remote_test_execution.bzl", "remote_test_execution_toolchain")
+load("@prelude//tests:test_toolchain.bzl", "noop_test_toolchain")
+
+system_cxx_toolchain(
+    name = "cxx",
+    # Absolute tool paths come from .buckconfig.local ([tools], written by ci/buck2/run.sh): the prelude's
+    # cc shim execs the compiler without a PATH lookup.
+    compiler = read_root_config("tools", "cc", "gcc"),
+    cxx_compiler = read_root_config("tools", "cxx", "g++"),
+    linker = read_root_config("tools", "cc", "gcc"),
+    archiver = read_root_config("tools", "ar", "ar"),
+    # The prelude adds -fuse-ld=lld for non-"g++" linker paths; use the plain bfd linker next to the gcc wrapper.
+    link_flags = ["-fuse-ld=bfd", "-B" + read_root_config("tools", "bindir", "/usr/bin")],
+    compiler_type = "gcc",
+    visibility = ["PUBLIC"],
+)
+
+system_genrule_toolchain(name = "genrule", visibility = ["PUBLIC"])
+system_python_bootstrap_toolchain(name = "python_bootstrap", visibility = ["PUBLIC"])
+
+# Same flags as cargo's default dev/test profile: opt-level 0 (explicit: build scripts read OPT_LEVEL) and full debuginfo.
+system_rust_toolchain(
+    name = "rust",
+    default_edition = "2021",
+    rustc_flags = ["-Copt-level=0", "-Cdebuginfo=2"],
+    visibility = ["PUBLIC"],
+)
+
+remote_test_execution_toolchain(name = "remote_test_execution", visibility = ["PUBLIC"])
+noop_test_toolchain(name = "test", visibility = ["PUBLIC"])

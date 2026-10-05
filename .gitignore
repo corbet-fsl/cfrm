@@ -3,3 +3,5 @@ coverage/
 *.tgz
 target/
 browser/pkg/
+/buck-out/
+/.buckconfig.local
