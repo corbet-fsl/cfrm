@@ -15,8 +15,9 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
         command: vec![4],
     };
     let requests = vec![
+        Request::Settings(SettingsInput {}),
         Request::Challenge(ChallengeInput {
-            credential: vec![1],
+            publication: vec![1],
         }),
         Request::Enter(EnterInput {
             challenge: vec![1],
@@ -47,10 +48,22 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
             cursor: vec![1],
         }),
         Request::Ciphertext(CiphertextInput {
-            possession,
+            possession: possession.clone(),
             owner: vec![1],
             revision: vec![2],
         }),
+        Request::RoomEpoch(RoomEpochInput {
+            possession: possession.clone(),
+        }),
+        Request::RoomIssue(RoomIssueInput {
+            possession,
+            operation: vec![6],
+            blinded_request: vec![7],
+        }),
+        Request::RoomConnect(room.clone()),
+        Request::RoomRenew(room.clone()),
+        Request::RoomDisconnect(room.clone()),
+        Request::RoomRead(room.clone()),
         Request::RoomOrder(room.clone()),
         Request::RoomRelay(room.clone()),
         Request::RoomResume(room.clone()),
@@ -64,7 +77,12 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
     for request in requests {
         let name = request.info().name;
         assert!((request.info().input_schema)().is_object());
-        if name.starts_with("room_") {
+        if matches!(name, "room_epoch" | "room_issue") {
+            assert_eq!(
+                request.info().requirement,
+                Requirement::CurrentDeviceSession
+            );
+        } else if name.starts_with("room_") {
             assert_eq!(request.info().requirement, Requirement::AnonymousRoomPass);
         }
         let bytes = serde_json::to_vec(&Call::new(request)).unwrap();
@@ -97,11 +115,11 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
 #[cfg_attr(not(target_arch = "wasm32"), test)]
 fn wire_decoder_refuses_duplicate_unknown_and_unbounded_input() {
     for bytes in [
-        br#"{"version":1,"version":1,"request":{"action":"challenge","input":{"credential":[]}}}"#
+        br#"{"version":1,"version":1,"request":{"action":"challenge","input":{"publication":[]}}}"#
             .as_slice(),
-        br#"{"version":1,"request":{"action":"challenge","input":{"credential":[],"extra":true}}}"#,
+        br#"{"version":1,"request":{"action":"challenge","input":{"publication":[],"extra":true}}}"#,
         br#"{"version":1,"request":{"action":"unknown","input":{}}}"#,
-        br#"{"version":1,"request":{"action":"challenge","input":{"credential":[256]}}}"#,
+        br#"{"version":1,"request":{"action":"challenge","input":{"publication":[256]}}}"#,
     ] {
         assert_eq!(
             execute_tool("challenge", bytes, 4096),
@@ -113,7 +131,9 @@ fn wire_decoder_refuses_duplicate_unknown_and_unbounded_input() {
         ));
     }
     assert!(matches!(Call::decode(&[0; 8], 7), Err(ErrorCode::TooLarge)));
-    let mut call = Call::new(Request::Challenge(ChallengeInput { credential: vec![] }));
+    let mut call = Call::new(Request::Challenge(ChallengeInput {
+        publication: vec![],
+    }));
     call.version = 2;
     assert!(matches!(
         Call::decode(&serde_json::to_vec(&call).unwrap(), 4096),
