@@ -1,0 +1,40 @@
+schema = 1
+project = "cfrm"
+
+# .ci/ccid.toml for corbet-libs/cfrm — runtime adapter.
+# Ports ALL Linux gates from .github/workflows/ci.yml (jobs resolve,
+# check, dependency-policy, coverage) into .ci/verify.sh in CI ordering,
+# environment, and flags, plus always-fresh advisories. kind="cargo" is not
+# used: gates need the fmt patch dance (not --check), rustc x2, wasm-pack
+# browser vectors, npm/tsc/api gates, and a nightly coverage toolchain that
+# the cargo kind cannot express.
+# Pure resolve-job selftests preserved in verify: resolve's committed-graph
+# `check-first-party.py` (resolver.txt/cargo-update/npm-update refresh is
+# separate, excluded like dependabot-auto-merge).
+# No cargo-deny gate config exists in-repo, but CI runs
+# `cargo deny --locked check advisories`, so advisories is declared and runs
+# fresh via `ccid check`, never `cached`.
+# cfrm has zero git dependencies in Cargo.lock, so the runner sets no
+# insteadOf rewrite (nothing to rewrite) and installs no wasm runner
+# (wasm-pack test needs none); Chrome pairing comes from pinned nix
+# chromium+chromedriver with a job-local webdriver.json (CI wrote it from
+# setup-chrome's CHROME_BINARY).
+
+[checks.verify]
+kind = "commands"
+commands = [["bash", ".ci/verify.sh"]]
+cache_tools = [["rustc", "-vV"], ["cargo", "--version"], ["rustup", "run", "nightly", "rustc", "-vV"], ["rustup", "run", "nightly", "cargo", "llvm-cov", "--version"], ["node", "--version"], ["python3", "--version"], ["wasm-pack", "--version"], ["clang", "--version"], ["chromedriver", "--version"], ["chromium", "--version"]]
+cache_outputs = ["coverage.json", "coverage.lcov", "coverage.txt"]
+
+[checks.advisories]
+kind = "commands"
+commands = [["cargo", "deny", "--locked", "check", "advisories"]]
+
+[render]
+tool_revision = "81ebac8e86e20bc93b69d5e912bbcb0c0d036d58"
+
+[jobs.verify]
+scheduler = "crow"
+checks = ["verify", "advisories"]
+workflow = "repository-jobs"
+command = ["bash", ".ci/run-cached.sh"]
