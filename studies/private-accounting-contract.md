@@ -15,7 +15,7 @@ The follow-up [directional blind-receipt study](directional-blind-receipts.md) i
 | Registered acknowledgement accepted | A distinct currently qualified Semaphore identity endorsed the named target once for that lifetime scope | A particular permit was used, a first reply happened, or the interaction was sincere |
 | Target authenticates and claims activity | The target voluntarily exercised its own certified account capability in this rule epoch | It privately sent or received any message |
 
-These distinctions follow the [permit ledger](../experiments/anonymous-permits/permits.js), [registered acknowledgements](../experiments/private-reciprocity/acknowledgement.js) and [recipient Inbox](https://github.com/corbet-libs/cmsg/blob/main/src/inbox.rs). The cfrm run at `11acb6a30c23b28abaafe4c10e228efdaed90aae` passed 105 tests, including 16 permit, 10 acknowledgement, 11 enrollment and 13 checkpoint tests. That validates the primitives, not the proposed accounting controller. Existing [simulator rules](../docs/rules.md) intentionally have more information.
+These distinctions follow the permit ledger (removed experiment), registered acknowledgements (removed experiment) and [recipient Inbox](https://github.com/corbet-libs/cmsg/blob/main/src/inbox.rs). The cfrm run at `11acb6a30c23b28abaafe4c10e228efdaed90aae` passed 105 tests, including 16 permit, 10 acknowledgement, 11 enrollment and 13 checkpoint tests. That validates the primitives, not the proposed accounting controller. Existing [simulator rules](../docs/rules.md) intentionally have more information.
 
 Do not count successful redemption responses as distinct spends: the winning claim can receive `accepted:true` repeatedly. Count first ledger insertion. Expired ledger rows are pruned, so a current row count is not automatically a lifetime operational total.
 
@@ -62,4 +62,4 @@ Likewise, an anonymous acknowledgement hides its prover. It cannot increment tha
 
 For the next bounded experiment, compare this explicitly named candidate with the omniscient simulator baseline. Report reservation counts, anonymous endorsement activity, mature accounts and accepted-gate bounds separately from synthetic delivered/reciprocated outcomes. If directional balance or nontransferable per-ID limits remain mandatory, keep those requirements open and investigate existing cryptographic mechanisms before claiming the accounting design complete. Do not replace missing evidence with ordinary hashes of member pairs, client-reported counters or operator-visible conversation records.
 
-[Proposed fail-first acceptance cases](../experiments/private-reciprocity/ACCOUNTING-ACCEPTANCE.md) define the next reviewable milestone. No accounting implementation accompanies this study.
+Proposed fail-first acceptance cases (removed experiment) define the next reviewable milestone. No accounting implementation accompanies this study.

@@ -47,4 +47,4 @@ Cooperative agents always accept and reply in these scenarios; that generosity c
 
 This study demonstrates arithmetic and synthetic behavior. The simulator retains a contact graph internally. A private cryptographic implementation still needs authenticated events, hidden state, first-contact uniqueness and anti-replay without exposing that graph. The [state boundary](../docs/boundaries.md) remains unchanged.
 
-Reproduce with `npm run experiment -- --compare --epochs 16 --json`. Raw per-seed results: [JSON](../experiments/results/window-comparison.json), [CSV](../experiments/results/window-comparison.csv).
+Reproduce with `npm run experiment -- --compare --epochs 16 --json`. Raw per-seed results: JSON (removed experiment), CSV (removed experiment).

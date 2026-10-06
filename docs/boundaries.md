@@ -18,10 +18,10 @@ Profiles stay with members. The rule experiment stores no profile text, pictures
 
 | Information | Intended holder | Current cfrm implementation |
 |---|---|---|
-| Profile | Member client | Experimental [owner/reader handler](../experiments/member-profiles/README.md) with real anonymous eligibility proofs and 23 passing tests; no actual profile Tor listener or native app |
+| Profile | Member client | Experimental owner/reader handler (removed experiment) with real anonymous eligibility proofs and 23 passing tests; no actual profile Tor listener or native app |
 | Presence lease and rendezvous capability | Ephemeral rendezvous system | Real certified IDs, onion routes and bounded ephemeral sessions; synthetic presence also exists in the rule model |
 | Private first-contact history and local blocks | Member client, with cryptographic validity proofs as needed | cmsg's private durable journals and experimental account/peer proofs; simulator maps remain diagnostic only |
-| Durable allowance and double-spend prevention | Hidden state commitments and minimal spent markers | Real [blind first-contact permits](../experiments/anonymous-permits/README.md) and a separate experimental [private account ledger](account-ledger.md), both with durable anti-replay |
+| Durable allowance and double-spend prevention | Hidden state commitments and minimal spent markers | Real blind first-contact permits (removed experiment) and a separate experimental [private account ledger](account-ledger.md), both with durable anti-replay |
 | Group roster and consent | Group participants | Synthetic `GroupExperiment` state |
 | Operational health | Aggregated, delayed measurements, privacy design unresolved | Aggregate experiment diagnostics |
 

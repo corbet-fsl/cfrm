@@ -86,7 +86,7 @@ checks across 31/35 child processes, plus 10/12 chronological live applies.
 Both scenarios change the waiting period from 500 to 900 synthetic seconds,
 recover exact accepted old-policy retries, and reject unused old-policy writes.
 Original reservations still expire at 600. See the
-[current integration evidence](../experiments/private-accounting/account-state/README.md#revision3-integration-evidence)
+current integration evidence (removed experiment)
 for proof counts, artifact hashes and limits.
 
 ### Earlier relation
@@ -104,7 +104,7 @@ advancement and expiry are rechecked when the paused verifier finishes.
 
 Those tests deliberately use a synthetic verifier to isolate the storage
 contract. They are not cryptographic acceptance evidence. The separate
-[account-state integration](../experiments/private-accounting/account-state/README.md)
+account-state integration (removed experiment)
 invokes the real pinned backend through
 [account_ledger_fixture](../examples/account_ledger_fixture.rs). Answer passed
 with the recorded browser proofs and corrected ledger on Crow 9/49; Close passed

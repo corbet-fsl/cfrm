@@ -154,7 +154,7 @@ and the remaining production and recovery limits.
 
 ## Can the directional blind-receipt experiment be repaired directly?
 
-The [experiment](../experiments/directional-receipts/README.md) already demonstrates
+The experiment (removed experiment) already demonstrates
 real membership proofs, authorized named debits, blind receipts, atomic retry and
 conditional MLS release. Its affirmative pooling cases deliberately succeed:
 the hidden qualified prover can prepare a receipt naming another hidden owner.
@@ -202,7 +202,7 @@ setup parameters and verifier; review transitive licensing before adoption.
 
 ## Historical executable spike and subsequent work
 
-The [isolated executable spike](../experiments/private-accounting/README.md)
+The isolated executable spike (removed experiment)
 uses Noir's built-in P-256 verifier and browser WebCrypto signing, with a real
 Ed25519-verified root/device enrollment bridge. Crow **9/37** passed at source
 `310bd23086f0978b5ffe3f7492dcb28e30786eb9`: 40 browser checks and 19 independent
@@ -259,7 +259,7 @@ benchmark pass. Those initial comparisons alone did not constitute the full back
 
 ### Measured commitment comparison
 
-The [artifact-only profiler](../experiments/private-accounting/profile.mjs)
+The artifact-only profiler (removed experiment)
 passed on Crow 9/39: SHA-256 source accounts for 152,608 gates (76.2%) and P-256
 for 43,103 of the existing 200,214. This is source attribution, not isolated
 primitive timing or a proportional memory forecast.
@@ -291,7 +291,7 @@ This namespace change is not a migration
 path for existing states/markers, and the composition has no audit claim.
 
 
-The [durable SQLite experiment](../experiments/private-accounting/ledger.md)
+The durable SQLite experiment (removed experiment)
 passed Crow 9/42 at `0ef6fb410ad356ff483be49b7da45da3be9ed623`: 37 storage
 checks within 54 independent-process checks, alongside 51 browser checks.
 Actual verified statements drive retry, rollback, lost-response and competing

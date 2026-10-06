@@ -53,4 +53,4 @@ All nine combinations of seeds 1/42/101 and limits 1/3/6 preserve the grant boun
 
 The simulator has an omniscient contact graph and trusted synthetic eligibility oracle. Its arithmetic is not a proof of private production accounting. It does not model network anonymity, packet loss, adversarial scheduling, large Sybil markets, actual user response preferences, denial of service or incentives outside the system. Numerical safety is established only for the explicit simulated rules. The graph and plaintext counters must not become operator storage.
 
-Raw numerical evidence: [seed 42 JSON](../experiments/results/seed-42.json), [all sweep rows](../experiments/results/sweep.csv). Other default-seed tests and group-consent tests run from current main; the recorded dataset above retains its exact source revision.
+Raw numerical evidence: seed 42 JSON (removed experiment), all sweep rows (removed experiment). Other default-seed tests and group-consent tests run from current main; the recorded dataset above retains its exact source revision.

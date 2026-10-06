@@ -5,7 +5,7 @@
 **2026-09-15 — partially implemented experimental protocol; not audited or enabled for production.**
 
 This extends the requirements in [Private reciprocal accounting](private-accounting.md)
-and the [account-state foundation](../experiments/private-accounting/account-state/README.md).
+and the account-state foundation (removed experiment).
 The foundation implements proved empty genesis, both reservation maps, activation,
 settlement, cancellation, expiry, refill and a [durable Rust ledger](account-ledger.md).
 Peer presentations bind accepted reservations to cmsg's protected live-release

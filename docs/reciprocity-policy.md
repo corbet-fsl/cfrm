@@ -206,7 +206,7 @@ change the waiting period from 500 to 900 while retaining original expiry 600.
 Close settles the recipient immediately; the sender later proves its single
 deadline refund without the recipient. All times are synthetic. Browser and
 Node use the same cryptographic backend; this is not implementation diversity.
-See the [current integration evidence](../experiments/private-accounting/account-state/README.md#revision3-integration-evidence)
+See the current integration evidence (removed experiment)
 for checked artifact hashes and [proof costs](account-proof-cost.md).
 
 ### Earlier relation
@@ -227,5 +227,5 @@ At that cmsg revision, Crow10/76 passed 161 native tests plus Wasm checking;
 Crow10/77 passed 21 actual Chromium contract groups including shipped IndexedDB
 version checks across concurrent instances. Scripted transport cases and the
 earlier private-Tor runtime evidence are labeled separately. See the
-[account-state evidence](../experiments/private-accounting/account-state/README.md)
+account-state evidence (removed experiment)
 and [proof costs](account-proof-cost.md) for artifacts and remaining limits.
