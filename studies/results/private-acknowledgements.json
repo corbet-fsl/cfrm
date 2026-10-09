@@ -1,5 +1,5 @@
 {
-  "sourceCommit": "e56ce6466f8c169a6ff6dce5ba12a1d0dec58092",
+  "sourceCommit": "67ce5900757863d71dd7f48fc8bcd76a14735e61",
   "execution": "internal CI, synthetic inputs, verified source archive",
   "nodeVersion": "24.19.0",
   "tests": { "main": 55, "blindPermits": 16, "acknowledgement": 10, "enrollment": 11, "failed": 0 },

@@ -1,7 +1,7 @@
 {
-  "sourceCommit": "11acb6a30c23b28abaafe4c10e228efdaed90aae",
-  "redSourceCommit": "09c12d3a9c8f460e8eaf33763c897dc1a6e92c64",
-  "cvldCommit": "c416d9edd6f7f7259d84b88838b8e607b2166671",
+  "sourceCommit": "940c6de22851e17f2ff2e8caf83bde2bf11c8ade",
+  "redSourceCommit": "041a19dc8b5b7557ccc8fabdd5e00bc63282caff",
+  "cvldCommit": "0f70ac227b4ad688c01437bbf0a08934da4561a7",
   "execution": "internal CI, synthetic inputs, verified source archives",
   "tests": { "main": 55, "blindPermits": 16, "acknowledgement": 10, "enrollment": 11, "checkpoints": 13, "failed": 0 },
   "registeredProofMembers": 17,
