@@ -16,7 +16,14 @@ The candidate `runtime::Service` composes one Volatile handle, current Assurance
 and actual Gather children. `spawn` returns a concrete bounded Handle and worker;
 queued mutations complete after caller cancellation, and worker drop/panic fences
 the shared store. `router_with` consumes that Handle, never an accepting callback.
-Challenge/enter/replace/heartbeat/depart/search/ciphertext delegate owner authority.
+Settings and credential-gated challenges delegate to their original owners.
+The runtime refuses admission, attendance and anonymous room actions with
+`AuthorityUnavailable` after cheap quota checks: Switchboard does not yet consume
+the accounting owner's mandatory minimum-frontier/currentness capability.
+This applies to the public Handle and HTTP controller, including valid device
+signatures and empty or nonempty record proofs. No configuration or test flag
+enables partial admission. The retained dispatch composition cannot authorize
+these actions until the original accounting relation is integrated.
 The unsigned request transcript includes the canonical versioned action and every
 input except its signature. Ciphertext's requested Profile revision is eight-byte
 big-endian; attendance storage revisions are exact sixteen-byte tokens.
@@ -36,12 +43,21 @@ No deployed incarnation controller or accepting integration is claimed yet.
 
 ## Acceptance still open
 
-Real trust/credential/profile/device round trips; replay, revocation and stale-generation denial through every generated surface; live typed pages/deltas and ciphertext refusal races; Memory/Valkey parity; no retained member state across restart; real anonymous room protocol; full line and branch coverage; security review. Refusal and transport tests establish none of the missing admission successes.
+Complete admission including original accounting currentness; replay, revocation
+and stale-generation denial through every generated surface; live typed
+pages/deltas and ciphertext refusal races; Memory/Valkey parity; no retained
+member state across restart; real anonymous room protocol qualification; full
+line and branch coverage; security review. Real partial
+trust/credential/profile/device, attendance, Lookup and
+anonymous room scenarios exercise the owning libraries directly. They do not
+establish complete Forum admission. Runtime refusal tests retain the actual
+controller and HTTP boundary and check that refused requests create no attendance.
 
 ## Anonymous rooms and MCP
 
-Authenticated `room_epoch` and `room_issue` use CurrentDeviceSession and the
-original sealed Switchboard capability, with the original signed quota and common
+The retained composition for `room_epoch` and `room_issue` uses
+CurrentDeviceSession and the original sealed Switchboard capability, with the
+original signed quota and common
 configured epoch. The latter carries only operation and original BlindRequest,
 never a room/hash/tag. All anonymous command inputs contain only the room owner's
 opaque pass and command. The registry marks those AnonymousRoomPass; they never include authenticated presence session
@@ -97,7 +113,9 @@ artifacts and these source paths still require actual native/browser CI.
 
 The 2026-10-02 05:45 binding MVP correction restores G2 frontier commitments and
 zero-knowledge currentness plus public punishment. Earlier record-disabled
-admission source is therefore NOT release-complete. The reserved record_proof
-input currently refuses nonempty data; original accounting/Guard/Charter capability
+admission source is therefore NOT release-complete. Both empty and nonempty
+record_proof inputs are refused; original accounting/Guard/Charter capability
 integration is required before deploying or claiming MVP admission acceptance.
-No person-specific current-record lookup or accepting substitute is permitted.
+The public runtime therefore refuses all actions that would require that missing
+capability before calling their owners. No person-specific current-record lookup
+or accepting substitute is permitted.

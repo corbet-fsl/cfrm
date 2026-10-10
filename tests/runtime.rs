@@ -118,20 +118,6 @@ async fn admission(app: &axum::Router, fixture: &Fixture) -> Request {
         record_proof: vec![],
     })
 }
-fn signed(mut request: Request, fixture: &Fixture) -> Request {
-    let proof = request.possession().unwrap();
-    let session = serde_json::from_slice(&proof.session).unwrap();
-    let nonce = proof.request_nonce.as_slice().try_into().unwrap();
-    let message = cswb::request_message(
-        ORIGIN,
-        request.info().name,
-        &session,
-        &nonce,
-        &request.unsigned_bytes().unwrap(),
-    );
-    request.possession_mut().unwrap().signature = fixture.device.sign(&message).to_bytes().to_vec();
-    request
-}
 fn possession(session: &[u8], nonce: u8) -> Possession {
     Possession {
         session: session.to_vec(),
@@ -278,25 +264,6 @@ async fn bootstrap(handle: &runtime::Handle, now: u64) {
         .unwrap();
 }
 
-async fn enter(app: &axum::Router, fixture: &Fixture) -> EnterOutput {
-    let request = admission(app, fixture).await;
-    let Output::Enter(output) = call(app, request).await.unwrap().response else {
-        panic!("enter output")
-    };
-    output
-}
-
-fn search(session: &[u8], nonce: u8, fixture: &Fixture) -> Request {
-    signed(
-        Request::Search(SearchInput {
-            possession: possession(session, nonce),
-            cursor: None,
-            page_size: 3,
-        }),
-        fixture,
-    )
-}
-
 async fn announce_revision(handle: &runtime::Handle, clock: &Time) {
     clock.advance(1000);
     let request = handle.next_feed().await.unwrap().unwrap();
@@ -371,28 +338,153 @@ async fn a_clock_regression_at_request_completion_refuses_the_credential_challen
 }
 
 #[tokio::test]
-async fn signed_member_revocation_removes_a_candidate_and_refuses_its_session() {
+async fn missing_accounting_currentness_refuses_every_member_action_without_attendance() {
     let clock = Time::new();
     let now = clock.now().unwrap() / 1000;
     let (app, handle, worker, storage) = runtime(&clock);
     bootstrap(&handle, now).await;
+    assert!(matches!(
+        call(&app, Request::Settings(SettingsInput {}))
+            .await
+            .unwrap()
+            .response,
+        Output::Settings(_)
+    ));
     let alice = Fixture::new("alice", 1, now).await;
-    let bob = Fixture::new("bob", 1, now).await;
-    let a = enter(&app, &alice).await;
-    let b = enter(&app, &bob).await;
-    let Output::Search(before) = call(&app, search(&b.session, 1, &bob))
-        .await
-        .unwrap()
-        .response
-    else {
-        panic!("search output")
+    // This is an original credential, signed public profile and device proof.
+    // They cannot replace the absent accounting owner's currentness evidence.
+    let entry = admission(&app, &alice).await;
+    let proof = possession(&[], 1);
+    let room = RoomInput {
+        room_pass: vec![],
+        command: vec![],
     };
-    assert_eq!(before.entries[0].owner, b"alice");
-
-    announce_revision(&handle, &clock).await;
-    // A change announcement cannot stand in for the authenticated snapshots.
+    let requests = vec![
+        entry.clone(),
+        Request::Replace(ReplaceInput {
+            possession: proof.clone(),
+            expected_revision: vec![],
+            publication: alice.publication.signed.clone(),
+            record_proof: vec![],
+        }),
+        Request::Heartbeat(HeartbeatInput {
+            possession: proof.clone(),
+            expected_revision: vec![],
+        }),
+        Request::Depart(DepartInput {
+            possession: proof.clone(),
+        }),
+        Request::Search(SearchInput {
+            possession: proof.clone(),
+            cursor: None,
+            page_size: 3,
+        }),
+        Request::Watch(WatchInput {
+            possession: proof.clone(),
+            cursor: vec![],
+        }),
+        Request::Ciphertext(CiphertextInput {
+            possession: proof.clone(),
+            owner: b"alice".to_vec(),
+            revision: vec![],
+        }),
+        Request::RoomEpoch(RoomEpochInput {
+            possession: proof.clone(),
+        }),
+        Request::RoomIssue(RoomIssueInput {
+            possession: proof,
+            operation: vec![],
+            blinded_request: vec![],
+        }),
+        Request::RoomConnect(room.clone()),
+        Request::RoomRenew(room.clone()),
+        Request::RoomDisconnect(room.clone()),
+        Request::RoomRead(room.clone()),
+        Request::RoomOrder(room.clone()),
+        Request::RoomRelay(room.clone()),
+        Request::RoomResume(room.clone()),
+        Request::RoomHandover(room),
+    ];
     assert_eq!(
-        call(&app, search(&b.session, 2, &bob)).await,
+        requests
+            .iter()
+            .map(|request| request.info().name)
+            .collect::<Vec<_>>(),
+        actions()
+            .into_iter()
+            .filter(|action| !matches!(
+                action.requirement,
+                Requirement::PublishedPolicy | Requirement::Credential
+            ))
+            .map(|action| action.name)
+            .collect::<Vec<_>>()
+    );
+    for request in requests {
+        assert_eq!(
+            call(&app, request.clone()).await,
+            Err(ErrorCode::AuthorityUnavailable)
+        );
+        assert_eq!(
+            handle.execute(ORIGIN.into(), Call::new(request)).await,
+            Err(ErrorCode::AuthorityUnavailable)
+        );
+        assert!(storage.get("swb_alice").await.unwrap().is_none());
+        assert!(storage.get("room-pass-issuer").await.unwrap().is_none());
+    }
+    let Request::Enter(mut supplied_proof) = entry.clone() else {
+        panic!("entry")
+    };
+    supplied_proof.record_proof = vec![1, 2, 3];
+    assert_eq!(
+        call(&app, Request::Enter(supplied_proof)).await,
+        Err(ErrorCode::AuthorityUnavailable)
+    );
+    // Dropping the result receiver cannot let an already queued request bypass
+    // the same refusal. The following command is the controller's FIFO barrier.
+    {
+        let future = handle.execute(ORIGIN.into(), Call::new(entry));
+        let mut future = std::pin::pin!(future);
+        assert!(futures_util::poll!(&mut future).is_pending());
+    }
+    handle.next_feed().await.unwrap();
+    assert!(storage.get("swb_alice").await.unwrap().is_none());
+    assert!(storage.get("room-pass-issuer").await.unwrap().is_none());
+    drop(app);
+    drop(handle);
+    worker.await.unwrap();
+    assert_eq!(storage.state(), cmmr::State::Closed);
+}
+
+#[tokio::test]
+async fn credential_challenges_require_ready_trust_exact_origin_and_a_current_member() {
+    let clock = Time::new();
+    let now = clock.now().unwrap() / 1000;
+    let (app, handle, worker, storage) = runtime(&clock);
+    let alice = Fixture::new("alice", 1, now).await;
+    let request = Request::Challenge(ChallengeInput {
+        publication: alice.publication.signed.clone(),
+    });
+    assert_eq!(
+        call(&app, request.clone()).await,
+        Err(ErrorCode::AuthorityUnavailable)
+    );
+    assert_eq!(
+        handle
+            .execute(
+                "https://foreign.example.test".into(),
+                Call::new(request.clone())
+            )
+            .await,
+        Err(ErrorCode::Origin)
+    );
+    bootstrap(&handle, now).await;
+    assert!(matches!(
+        call(&app, request.clone()).await.unwrap().response,
+        Output::Challenge(_)
+    ));
+    announce_revision(&handle, &clock).await;
+    assert_eq!(
+        call(&app, request.clone()).await,
         Err(ErrorCode::AuthorityUnavailable)
     );
     install_revision(
@@ -401,428 +493,11 @@ async fn signed_member_revocation_removes_a_candidate_and_refuses_its_session() 
         serde_json::json!({"members":["alice"],"devices":[]}),
     )
     .await;
-    let Output::Search(after) = call(&app, search(&b.session, 3, &bob))
-        .await
-        .unwrap()
-        .response
-    else {
-        panic!("search output")
-    };
-    assert!(after.entries.is_empty());
-    assert!(storage.get("swb_alice").await.unwrap().is_none());
-    assert!(storage.get("swb_bob").await.unwrap().is_some());
     assert_eq!(
-        call(&app, search(&a.session, 1, &alice)).await,
-        Err(ErrorCode::ResetRequired)
-    );
-    assert_eq!(
-        call(
-            &app,
-            Request::Challenge(ChallengeInput {
-                publication: alice.publication.signed.clone(),
-            })
-        )
-        .await,
-        Err(ErrorCode::AuthorityUnavailable)
-    );
-    drop(app);
-    drop(handle);
-    worker.await.unwrap();
-    assert_eq!(storage.state(), cmmr::State::Closed);
-}
-
-#[tokio::test]
-async fn signed_device_revocation_refuses_the_next_request_and_preserves_other_devices() {
-    let clock = Time::new();
-    let now = clock.now().unwrap() / 1000;
-    let (app, handle, worker, storage) = runtime(&clock);
-    bootstrap(&handle, now).await;
-    let alice = Fixture::new("alice", 1, now).await;
-    let bob = Fixture::with_device("bob", 1, now, 14).await;
-    let a = enter(&app, &alice).await;
-    let b = enter(&app, &bob).await;
-    announce_revision(&handle, &clock).await;
-    install_revision(
-        &handle,
-        now,
-        serde_json::json!({
-            "members":[],"devices":[alice.device.verifying_key().to_bytes()],
-        }),
-    )
-    .await;
-    assert_eq!(
-        call(&app, search(&a.session, 1, &alice)).await,
+        call(&app, request).await,
         Err(ErrorCode::AuthorityUnavailable)
     );
     assert!(storage.get("swb_alice").await.unwrap().is_none());
-    assert!(storage.get("swb_bob").await.unwrap().is_some());
-    let Output::Search(page) = call(&app, search(&b.session, 1, &bob))
-        .await
-        .unwrap()
-        .response
-    else {
-        panic!("search output")
-    };
-    assert!(page.entries.is_empty());
-    drop(app);
-    drop(handle);
-    worker.await.unwrap();
-    assert_eq!(storage.state(), cmmr::State::Closed);
-}
-
-#[tokio::test]
-async fn a_new_attendance_fences_old_departures_and_heartbeats() {
-    let clock = Time::new();
-    let now = clock.now().unwrap() / 1000;
-    let (app, handle, worker, storage) = runtime(&clock);
-    bootstrap(&handle, now).await;
-    let alice = Fixture::new("alice", 1, now).await;
-    let old = enter(&app, &alice).await;
-    let current = enter(&app, &alice).await;
-    assert_ne!(old.session, current.session);
-    let replacement = storage.get("swb_alice").await.unwrap().unwrap();
-    for request in [
-        Request::Depart(DepartInput {
-            possession: possession(&old.session, 1),
-        }),
-        Request::Heartbeat(HeartbeatInput {
-            possession: possession(&old.session, 2),
-            expected_revision: old.revision,
-        }),
-    ] {
-        assert_eq!(
-            call(&app, signed(request, &alice)).await,
-            Err(ErrorCode::ResetRequired)
-        );
-        let retained = storage.get("swb_alice").await.unwrap().unwrap();
-        assert_eq!(retained.generation, replacement.generation);
-        assert_eq!(retained.revision, replacement.revision);
-    }
-    call(&app, search(&current.session, 1, &alice))
-        .await
-        .unwrap();
-    call(
-        &app,
-        signed(
-            Request::Depart(DepartInput {
-                possession: possession(&current.session, 2),
-            }),
-            &alice,
-        ),
-    )
-    .await
-    .unwrap();
-    assert!(storage.get("swb_alice").await.unwrap().is_none());
-    drop(app);
-    drop(handle);
-    worker.await.unwrap();
-    assert_eq!(storage.state(), cmmr::State::Closed);
-}
-
-#[tokio::test]
-async fn the_exclusive_presence_deadline_requires_a_new_attendance() {
-    let clock = Time::new();
-    let now = clock.now().unwrap() / 1000;
-    let (app, handle, worker, storage) = runtime(&clock);
-    bootstrap(&handle, now).await;
-    let alice = Fixture::new("alice", 1, now).await;
-    let old = enter(&app, &alice).await;
-    clock.advance(old.expires_at_ms - clock.now().unwrap() - 1);
-    call(&app, search(&old.session, 1, &alice)).await.unwrap();
-    clock.advance(1);
-    assert_eq!(
-        call(
-            &app,
-            signed(
-                Request::Heartbeat(HeartbeatInput {
-                    possession: possession(&old.session, 2),
-                    expected_revision: old.revision,
-                }),
-                &alice
-            )
-        )
-        .await,
-        Err(ErrorCode::ResetRequired)
-    );
-    assert!(storage.get("swb_alice").await.unwrap().is_none());
-    let current = enter(&app, &alice).await;
-    assert_ne!(old.session, current.session);
-    assert_eq!(current.expires_at_ms, clock.now().unwrap() + 10000);
-    call(&app, search(&current.session, 1, &alice))
-        .await
-        .unwrap();
-    drop(app);
-    drop(handle);
-    worker.await.unwrap();
-    assert_eq!(storage.state(), cmmr::State::Closed);
-}
-
-#[tokio::test]
-async fn real_http_admission_match_and_cancelled_mutation() {
-    let clock = Time::new();
-    let now = clock.now().unwrap() / 1000;
-    let (app, handle, worker, storage) = runtime(&clock);
-    let alice = Fixture::new("alice", 1, now).await;
-    let bob = Fixture::new("bob", 1, now).await;
-    assert_eq!(
-        call(
-            &app,
-            Request::Challenge(ChallengeInput {
-                publication: alice.publication.signed.clone()
-            })
-        )
-        .await,
-        Err(ErrorCode::AuthorityUnavailable)
-    );
-    assert_eq!(
-        handle
-            .execute(
-                "https://foreign.example.test".into(),
-                Call::new(Request::Challenge(ChallengeInput {
-                    publication: alice.publication.signed.clone()
-                }))
-            )
-            .await,
-        Err(ErrorCode::Origin)
-    );
-    let fetch = handle.start_feed().await.unwrap();
-    handle
-        .complete_feed(
-            fetch.id(),
-            serde_json::to_vec(&feed(
-                now,
-                1,
-                serde_json::json!({"members":[],"devices":[]}),
-            ))
-            .unwrap(),
-            false,
-        )
-        .await
-        .unwrap();
-    let entry = admission(&app, &alice).await;
-    let Reply {
-        response: Output::Enter(a),
-        ..
-    } = call(&app, entry.clone()).await.unwrap()
-    else {
-        panic!("enter output")
-    };
-    assert_eq!(call(&app, entry).await, Err(ErrorCode::ResetRequired));
-    let entry = admission(&app, &bob).await;
-    let Reply {
-        response: Output::Enter(_),
-        ..
-    } = call(&app, entry).await.unwrap()
-    else {
-        panic!("enter output")
-    };
-    let query = signed(
-        Request::Search(SearchInput {
-            possession: possession(&a.session, 1),
-            cursor: None,
-            page_size: 3,
-        }),
-        &alice,
-    );
-    let Reply {
-        response: Output::Search(page),
-        ..
-    } = call(&app, query.clone()).await.unwrap()
-    else {
-        panic!("search output")
-    };
-    assert_eq!(page.entries.len(), 1);
-    assert_eq!(page.entries[0].owner, b"bob");
-    assert_eq!(page.entries[0].publication, bob.publication.signed);
-    assert_eq!(call(&app, query).await, Err(ErrorCode::ResetRequired));
-    let fetch = signed(
-        Request::Ciphertext(CiphertextInput {
-            possession: possession(&a.session, 2),
-            owner: b"bob".to_vec(),
-            revision: 1u64.to_be_bytes().to_vec(),
-        }),
-        &alice,
-    );
-    let Reply {
-        response: Output::Ciphertext(ciphertext),
-        ..
-    } = call(&app, fetch).await.unwrap()
-    else {
-        panic!("ciphertext output")
-    };
-    assert_eq!(ciphertext.ciphertext, bob.publication.ciphertext);
-    // Authenticated issuance only sees the original blinded request. The
-    // anonymous request contains no session/member/device/room quota tag.
-    use cgth::cmbl::{self, passes};
-    let Reply {
-        response: Output::RoomEpoch(common),
-        ..
-    } = call(
-        &app,
-        signed(
-            Request::RoomEpoch(RoomEpochInput {
-                possession: possession(&a.session, 20),
-            }),
-            &alice,
-        ),
-    )
-    .await
-    .unwrap()
-    else {
-        panic!("epoch output")
-    };
-    let epoch: passes::Epoch = serde_json::from_slice(&common.epoch).unwrap();
-    let room = [41; 16];
-    let prepared = passes::PreparedPass::new(&epoch, room, now * 1000).unwrap();
-    let blinded = serde_json::to_vec(&prepared.request()).unwrap();
-    let issue = |nonce, operation| {
-        signed(
-            Request::RoomIssue(RoomIssueInput {
-                possession: possession(&a.session, nonce),
-                operation: vec![operation; 16],
-                blinded_request: blinded.clone(),
-            }),
-            &alice,
-        )
-    };
-    let Reply {
-        response: Output::RoomIssue(first),
-        ..
-    } = call(&app, issue(21, 1)).await.unwrap()
-    else {
-        panic!("issue output")
-    };
-    let Reply {
-        response: Output::RoomIssue(retry),
-        ..
-    } = call(&app, issue(22, 1)).await.unwrap()
-    else {
-        panic!("retry output")
-    };
-    assert_eq!(first.signature, retry.signature);
-    for operation in 2..=4 {
-        call(&app, issue(22 + operation, operation)).await.unwrap();
-    }
-    assert_eq!(call(&app, issue(27, 5)).await, Err(ErrorCode::Capacity));
-    let pass = prepared.finalize(&first.signature, now * 1000).unwrap();
-    let command = cmbl::Request {
-        room,
-        operation: [51; 16],
-        action: cmbl::Action::Resume {
-            connection: pass.connection(),
-        },
-    };
-    let input = RoomInput {
-        room_pass: pass
-            .prove(&command, &common.incarnation, now * 1000)
-            .unwrap(),
-        command: serde_json::to_vec(&command).unwrap(),
-    };
-    assert_eq!(
-        call(&app, Request::RoomRelay(input.clone())).await,
-        Err(ErrorCode::InvalidRequest)
-    );
-    let Reply {
-        response: Output::RoomResume(result),
-        ..
-    } = call(&app, Request::RoomResume(input)).await.unwrap()
-    else {
-        panic!("resume output")
-    };
-    let resumed: cmbl::Outcome = serde_json::from_slice(&result.result).unwrap();
-    assert_eq!(resumed.counter, 0);
-    assert_eq!(resumed.active_connections, 1);
-    let ordered = cmbl::Request {
-        room,
-        operation: [52; 16],
-        action: cmbl::Action::Order {
-            expected: 0,
-            ciphertext: vec![9, 8, 7],
-        },
-    };
-    let ordered_input = RoomInput {
-        room_pass: pass
-            .prove(&ordered, &common.incarnation, now * 1000)
-            .unwrap(),
-        command: serde_json::to_vec(&ordered).unwrap(),
-    };
-    let Reply {
-        response: Output::RoomOrder(result),
-        ..
-    } = call(&app, Request::RoomOrder(ordered_input.clone()))
-        .await
-        .unwrap()
-    else {
-        panic!("order output")
-    };
-    let ordered_result: cmbl::Outcome = serde_json::from_slice(&result.result).unwrap();
-    assert_eq!(ordered_result.counter, 1);
-    assert_eq!(ordered_result.ordering, resumed.ordering);
-    // Exact anonymous retry reconciles the actual original operation receipt.
-    let Reply {
-        response: Output::RoomOrder(retry),
-        ..
-    } = call(&app, Request::RoomOrder(ordered_input)).await.unwrap()
-    else {
-        panic!("order retry")
-    };
-    assert_eq!(result, retry);
-    let read = cmbl::Request {
-        room,
-        operation: [53; 16],
-        action: cmbl::Action::Read { after: 0 },
-    };
-    let read_input = RoomInput {
-        room_pass: pass.prove(&read, &common.incarnation, now * 1000).unwrap(),
-        command: serde_json::to_vec(&read).unwrap(),
-    };
-    let Reply {
-        response: Output::RoomRead(result),
-        ..
-    } = call(&app, Request::RoomRead(read_input.clone()))
-        .await
-        .unwrap()
-    else {
-        panic!("read output")
-    };
-    let read_result: cmbl::Outcome = serde_json::from_slice(&result.result).unwrap();
-    assert_eq!(read_result.frames[0].ciphertext, [9, 8, 7]);
-    // Losing the issuer anchor fences old anonymous passes without replacing it.
-    let anchor = storage.get("room-pass-issuer").await.unwrap().unwrap();
-    storage.delete_generation(&anchor.generation).await.unwrap();
-    assert_eq!(
-        call(&app, Request::RoomRead(read_input)).await,
-        Err(ErrorCode::AuthorityUnavailable)
-    );
-    assert_eq!(
-        call(
-            &app,
-            signed(
-                Request::RoomEpoch(RoomEpochInput {
-                    possession: possession(&a.session, 28)
-                }),
-                &alice
-            )
-        )
-        .await,
-        Err(ErrorCode::AuthorityUnavailable)
-    );
-    // Cancellation after queue admission cannot abandon a mutation midway.
-    let heartbeat = signed(
-        Request::Heartbeat(HeartbeatInput {
-            possession: possession(&a.session, 3),
-            expected_revision: a.revision.clone(),
-        }),
-        &alice,
-    );
-    {
-        let future = handle.execute(ORIGIN.into(), Call::new(heartbeat));
-        let mut future = std::pin::pin!(future);
-        assert!(futures_util::poll!(&mut future).is_pending());
-    }
-    handle.next_feed().await.unwrap(); // FIFO barrier after the cancelled waiter.
-    let committed = storage.get("swb_alice").await.unwrap().unwrap();
-    assert_ne!(committed.revision.0.to_vec(), a.revision);
     drop(app);
     drop(handle);
     worker.await.unwrap();

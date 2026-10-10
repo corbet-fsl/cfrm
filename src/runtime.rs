@@ -132,6 +132,16 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
             .preflight(b"forum", action)
             .await
             .map_err(error)?;
+        // Current frontier evidence is mandatory for admission and every
+        // attendance/room operation. Switchboard does not yet consume the
+        // accounting owner's verified currentness capability. A credential and
+        // device signature alone therefore cannot authorize these actions.
+        if !matches!(
+            call.request.info().requirement,
+            Requirement::PublishedPolicy | Requirement::Credential
+        ) {
+            return Err(ErrorCode::AuthorityUnavailable);
+        }
         let now_ms = self
             .clock
             .now()
