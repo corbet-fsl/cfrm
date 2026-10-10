@@ -16,18 +16,32 @@ use support::*;
 use tower::ServiceExt;
 
 #[derive(Clone)]
-struct Time(Arc<AtomicU64>);
+struct Time {
+    milliseconds: Arc<AtomicU64>,
+    reads: Arc<AtomicU64>,
+    regression_at: Arc<AtomicU64>,
+}
 impl Time {
     fn new() -> Self {
-        Self(Arc::new(AtomicU64::new(2_000_000_000_000)))
+        Self {
+            milliseconds: Arc::new(AtomicU64::new(2_000_000_000_000)),
+            reads: Arc::new(AtomicU64::new(0)),
+            regression_at: Arc::new(AtomicU64::new(u64::MAX)),
+        }
     }
     fn advance(&self, milliseconds: u64) {
-        self.0.fetch_add(milliseconds, Ordering::SeqCst);
+        self.milliseconds.fetch_add(milliseconds, Ordering::SeqCst);
     }
 }
 impl Clock for Time {
     fn now(&self) -> Result<u64, cmmr::Error> {
-        Ok(self.0.load(Ordering::SeqCst))
+        let read = self.reads.fetch_add(1, Ordering::SeqCst) + 1;
+        let now = self.milliseconds.load(Ordering::SeqCst);
+        Ok(if read == self.regression_at.load(Ordering::SeqCst) {
+            now - 1
+        } else {
+            now
+        })
     }
 }
 #[derive(Clone)]
@@ -134,6 +148,18 @@ fn runtime(
     tokio::task::JoinHandle<()>,
     cvtl::Volatile<Time>,
 ) {
+    runtime_with_request_clock(clock, clock)
+}
+
+fn runtime_with_request_clock(
+    clock: &Time,
+    request_clock: &Time,
+) -> (
+    axum::Router,
+    runtime::Handle,
+    tokio::task::JoinHandle<()>,
+    cvtl::Volatile<Time>,
+) {
     let now = clock.now().unwrap() / 1000;
     let issuer = issuer(now);
     let assurance = csrn::Assurance::new(
@@ -183,7 +209,7 @@ fn runtime(
         assurance,
         runtime::Parts {
             storage: storage.clone(),
-            clock: clock.clone(),
+            clock: request_clock.clone(),
             tokens: Random,
             throttle,
         },
@@ -302,6 +328,46 @@ async fn install_revision(handle: &runtime::Handle, now: u64, revoked: serde_jso
         )
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn a_clock_regression_at_request_completion_refuses_the_credential_challenge() {
+    let clock = Time::new();
+    let request_clock = Time::new();
+    clock.advance(1);
+    request_clock.advance(1);
+    let now = clock.now().unwrap() / 1000;
+    let alice = Fixture::new("alice", 1, now).await;
+    let (app, handle, worker, _) = runtime_with_request_clock(&clock, &request_clock);
+    bootstrap(&handle, now).await;
+    let request = Request::Challenge(ChallengeInput {
+        publication: alice.publication.signed.clone(),
+    });
+
+    // Equal request timestamps are valid. Measure the real owner path so the
+    // next request rolls back only at the final service completion sample.
+    let before = request_clock.reads.load(Ordering::SeqCst);
+    let result = call(&app, request.clone()).await.unwrap();
+    let reads = request_clock.reads.load(Ordering::SeqCst) - before;
+    let Output::Challenge(challenge) = result.response else {
+        panic!("challenge output")
+    };
+    assert!(!challenge.challenge.is_empty());
+    assert!(reads >= 2);
+
+    // The one-millisecond rollback stays within the same whole-second value
+    // used by Charter, and happens after the real owner has completed.
+    let completion = request_clock.reads.load(Ordering::SeqCst) + reads;
+    request_clock
+        .regression_at
+        .store(completion, Ordering::SeqCst);
+    let result = call(&app, request).await;
+    assert_eq!(request_clock.reads.load(Ordering::SeqCst), completion);
+    assert_eq!(result, Err(ErrorCode::AuthorityUnavailable));
+
+    drop(app);
+    drop(handle);
+    worker.await.unwrap();
 }
 
 #[tokio::test]

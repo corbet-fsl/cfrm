@@ -494,12 +494,11 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
             // MLS history/key handover still requires its original member owner.
             _ => return Err(ErrorCode::AuthorityUnavailable),
         };
-        if self
+        let completed_at_ms = self
             .clock
             .now()
-            .map_err(|_| ErrorCode::AuthorityUnavailable)?
-            >= authority_deadline
-        {
+            .map_err(|_| ErrorCode::AuthorityUnavailable)?;
+        if completed_at_ms < now_ms || completed_at_ms >= authority_deadline {
             return Err(ErrorCode::AuthorityUnavailable);
         }
         Ok(Reply::new(output))
