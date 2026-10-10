@@ -191,6 +191,7 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
                     .challenge(origin, &publication, &verification, &self.contact)
                     .await
                     .map_err(error)?;
+                authority_deadline = authority_deadline.min(challenge.expires_at_ms);
                 Output::Challenge(ChallengeOutput {
                     challenge: encode(&challenge)?,
                 })
@@ -216,6 +217,7 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
                     )
                     .await
                     .map_err(error)?;
+                authority_deadline = authority_deadline.min(live.deadline);
                 Output::Enter(EnterOutput {
                     session: encode(&session)?,
                     revision: live.revision.0.to_vec(),

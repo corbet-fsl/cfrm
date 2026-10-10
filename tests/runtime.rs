@@ -20,6 +20,8 @@ struct Time {
     milliseconds: Arc<AtomicU64>,
     reads: Arc<AtomicU64>,
     regression_at: Arc<AtomicU64>,
+    completion_at: Arc<AtomicU64>,
+    completion_ms: Arc<AtomicU64>,
 }
 impl Time {
     fn new() -> Self {
@@ -27,6 +29,8 @@ impl Time {
             milliseconds: Arc::new(AtomicU64::new(2_000_000_000_000)),
             reads: Arc::new(AtomicU64::new(0)),
             regression_at: Arc::new(AtomicU64::new(u64::MAX)),
+            completion_at: Arc::new(AtomicU64::new(u64::MAX)),
+            completion_ms: Arc::new(AtomicU64::new(0)),
         }
     }
     fn advance(&self, milliseconds: u64) {
@@ -39,6 +43,8 @@ impl Clock for Time {
         let now = self.milliseconds.load(Ordering::SeqCst);
         Ok(if read == self.regression_at.load(Ordering::SeqCst) {
             now - 1
+        } else if read == self.completion_at.load(Ordering::SeqCst) {
+            self.completion_ms.load(Ordering::SeqCst)
         } else {
             now
         })
@@ -331,6 +337,71 @@ async fn a_clock_regression_at_request_completion_refuses_the_credential_challen
     let result = call(&app, request).await;
     assert_eq!(request_clock.reads.load(Ordering::SeqCst), completion);
     assert_eq!(result, Err(ErrorCode::AuthorityUnavailable));
+
+    drop(app);
+    drop(handle);
+    worker.await.unwrap();
+}
+
+#[tokio::test]
+async fn challenge_completion_obeys_its_exclusive_owner_deadline() {
+    let clock = Time::new();
+    let request_clock = Time::new();
+    let now = clock.now().unwrap() / 1000;
+    let alice = Fixture::new("alice", 1, now).await;
+    let (app, handle, worker, _) = runtime_with_request_clock(&clock, &request_clock);
+    bootstrap(&handle, now).await;
+    let Output::Settings(settings) = call(&app, Request::Settings(SettingsInput {}))
+        .await
+        .unwrap()
+        .response
+    else {
+        panic!("settings output")
+    };
+    let request = Request::Challenge(ChallengeInput {
+        publication: alice.publication.signed.clone(),
+    });
+
+    // Measure the real signed-profile/owner path with a separate stable storage
+    // clock, then advance only the service's final completion sample.
+    let before = request_clock.reads.load(Ordering::SeqCst);
+    let result = call(&app, request.clone()).await.unwrap();
+    let reads = request_clock.reads.load(Ordering::SeqCst) - before;
+    let Output::Challenge(output) = result.response else {
+        panic!("challenge output")
+    };
+    let challenge: cswb::Challenge = serde_json::from_slice(&output.challenge).unwrap();
+    assert_eq!(challenge.expires_at_ms, clock.now().unwrap() + 10000);
+    assert!(reads >= 2);
+    // The original trust feed stays valid beyond all three completion times.
+    assert!(challenge.expires_at_ms + 1 < settings.valid_until * 1000);
+
+    for completed_at in [
+        challenge.expires_at_ms - 1,
+        challenge.expires_at_ms,
+        challenge.expires_at_ms + 1,
+    ] {
+        let completion = request_clock.reads.load(Ordering::SeqCst) + reads;
+        request_clock
+            .completion_ms
+            .store(completed_at, Ordering::SeqCst);
+        request_clock
+            .completion_at
+            .store(completion, Ordering::SeqCst);
+        let result = call(&app, request.clone()).await;
+        // Reaching this sample proves the refusal did not come from an earlier
+        // owner check, storage operation or stale-trust path.
+        assert_eq!(request_clock.reads.load(Ordering::SeqCst), completion);
+        if completed_at < challenge.expires_at_ms {
+            let Output::Challenge(output) = result.unwrap().response else {
+                panic!("challenge output")
+            };
+            let issued: cswb::Challenge = serde_json::from_slice(&output.challenge).unwrap();
+            assert_eq!(issued.expires_at_ms, challenge.expires_at_ms);
+        } else {
+            assert_eq!(result, Err(ErrorCode::AuthorityUnavailable));
+        }
+    }
 
     drop(app);
     drop(handle);
