@@ -4,15 +4,30 @@ use cfrm::*;
 use cgth::{cmmr, cswb, cthl};
 use cmmr::{Clock, Store};
 use ed25519_dalek::Signer as _;
-use std::{num::NonZeroUsize, time::Duration};
+use std::{
+    num::NonZeroUsize,
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
+    time::Duration,
+};
 use support::*;
 use tower::ServiceExt;
 
 #[derive(Clone)]
-struct Time;
+struct Time(Arc<AtomicU64>);
+impl Time {
+    fn new() -> Self {
+        Self(Arc::new(AtomicU64::new(2_000_000_000_000)))
+    }
+    fn advance(&self, milliseconds: u64) {
+        self.0.fetch_add(milliseconds, Ordering::SeqCst);
+    }
+}
 impl Clock for Time {
     fn now(&self) -> Result<u64, cmmr::Error> {
-        Ok(2_000_000_000_000)
+        Ok(self.0.load(Ordering::SeqCst))
     }
 }
 #[derive(Clone)]
@@ -111,9 +126,15 @@ fn possession(session: &[u8], nonce: u8) -> Possession {
     }
 }
 
-#[tokio::test]
-async fn real_http_admission_match_and_cancelled_mutation() {
-    let now = Time.now().unwrap() / 1000;
+fn runtime(
+    clock: &Time,
+) -> (
+    axum::Router,
+    runtime::Handle,
+    tokio::task::JoinHandle<()>,
+    cvtl::Volatile<Time>,
+) {
+    let now = clock.now().unwrap() / 1000;
     let issuer = issuer(now);
     let assurance = csrn::Assurance::new(
         cchr::Configuration {
@@ -144,7 +165,7 @@ async fn real_http_admission_match_and_cancelled_mutation() {
             page: 8,
             ttl_ms: 600000,
         },
-        Time,
+        clock.clone(),
     )
     .unwrap();
     let throttle = cthl::Throttle::new(
@@ -162,7 +183,7 @@ async fn real_http_admission_match_and_cancelled_mutation() {
         assurance,
         runtime::Parts {
             storage: storage.clone(),
-            clock: Time,
+            clock: clock.clone(),
             tokens: Random,
             throttle,
         },
@@ -211,6 +232,270 @@ async fn real_http_admission_match_and_cancelled_mutation() {
         handle.clone(),
     )
     .unwrap();
+    (app, handle, worker, storage)
+}
+
+async fn bootstrap(handle: &runtime::Handle, now: u64) {
+    let request = handle.start_feed().await.unwrap();
+    handle
+        .complete_feed(
+            request.id(),
+            serde_json::to_vec(&feed(
+                now,
+                1,
+                serde_json::json!({"members":[],"devices":[]}),
+            ))
+            .unwrap(),
+            false,
+        )
+        .await
+        .unwrap();
+}
+
+async fn enter(app: &axum::Router, fixture: &Fixture) -> EnterOutput {
+    let request = admission(app, fixture).await;
+    let Output::Enter(output) = call(app, request).await.unwrap().response else {
+        panic!("enter output")
+    };
+    output
+}
+
+fn search(session: &[u8], nonce: u8, fixture: &Fixture) -> Request {
+    signed(
+        Request::Search(SearchInput {
+            possession: possession(session, nonce),
+            cursor: None,
+            page_size: 3,
+        }),
+        fixture,
+    )
+}
+
+async fn announce_revision(handle: &runtime::Handle, clock: &Time) {
+    clock.advance(1000);
+    let request = handle.next_feed().await.unwrap().unwrap();
+    assert!(matches!(
+        request.action(),
+        csrn::feed::Action::Poll { revision: 1 }
+    ));
+    handle
+        .complete_feed(
+            request.id(),
+            serde_json::to_vec(&serde_json::json!({
+                "revision":2,"policy_epoch":2,"changed":true,
+            }))
+            .unwrap(),
+            true,
+        )
+        .await
+        .unwrap();
+}
+
+async fn install_revision(handle: &runtime::Handle, now: u64, revoked: serde_json::Value) {
+    let request = handle.next_feed().await.unwrap().unwrap();
+    assert!(matches!(request.action(), csrn::feed::Action::Fetch));
+    handle
+        .complete_feed(
+            request.id(),
+            serde_json::to_vec(&feed(now, 2, revoked)).unwrap(),
+            false,
+        )
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn signed_member_revocation_removes_a_candidate_and_refuses_its_session() {
+    let clock = Time::new();
+    let now = clock.now().unwrap() / 1000;
+    let (app, handle, worker, storage) = runtime(&clock);
+    bootstrap(&handle, now).await;
+    let alice = Fixture::new("alice", 1, now).await;
+    let bob = Fixture::new("bob", 1, now).await;
+    let a = enter(&app, &alice).await;
+    let b = enter(&app, &bob).await;
+    let Output::Search(before) = call(&app, search(&b.session, 1, &bob))
+        .await
+        .unwrap()
+        .response
+    else {
+        panic!("search output")
+    };
+    assert_eq!(before.entries[0].owner, b"alice");
+
+    announce_revision(&handle, &clock).await;
+    // A change announcement cannot stand in for the authenticated snapshots.
+    assert_eq!(
+        call(&app, search(&b.session, 2, &bob)).await,
+        Err(ErrorCode::AuthorityUnavailable)
+    );
+    install_revision(
+        &handle,
+        now,
+        serde_json::json!({"members":["alice"],"devices":[]}),
+    )
+    .await;
+    let Output::Search(after) = call(&app, search(&b.session, 3, &bob))
+        .await
+        .unwrap()
+        .response
+    else {
+        panic!("search output")
+    };
+    assert!(after.entries.is_empty());
+    assert!(storage.get("swb_alice").await.unwrap().is_none());
+    assert!(storage.get("swb_bob").await.unwrap().is_some());
+    assert_eq!(
+        call(&app, search(&a.session, 1, &alice)).await,
+        Err(ErrorCode::ResetRequired)
+    );
+    assert_eq!(
+        call(
+            &app,
+            Request::Challenge(ChallengeInput {
+                publication: alice.publication.signed.clone(),
+            })
+        )
+        .await,
+        Err(ErrorCode::AuthorityUnavailable)
+    );
+    drop(app);
+    drop(handle);
+    worker.await.unwrap();
+    assert_eq!(storage.state(), cmmr::State::Closed);
+}
+
+#[tokio::test]
+async fn signed_device_revocation_refuses_the_next_request_and_preserves_other_devices() {
+    let clock = Time::new();
+    let now = clock.now().unwrap() / 1000;
+    let (app, handle, worker, storage) = runtime(&clock);
+    bootstrap(&handle, now).await;
+    let alice = Fixture::new("alice", 1, now).await;
+    let bob = Fixture::with_device("bob", 1, now, 14).await;
+    let a = enter(&app, &alice).await;
+    let b = enter(&app, &bob).await;
+    announce_revision(&handle, &clock).await;
+    install_revision(
+        &handle,
+        now,
+        serde_json::json!({
+            "members":[],"devices":[alice.device.verifying_key().to_bytes()],
+        }),
+    )
+    .await;
+    assert_eq!(
+        call(&app, search(&a.session, 1, &alice)).await,
+        Err(ErrorCode::AuthorityUnavailable)
+    );
+    assert!(storage.get("swb_alice").await.unwrap().is_none());
+    assert!(storage.get("swb_bob").await.unwrap().is_some());
+    let Output::Search(page) = call(&app, search(&b.session, 1, &bob))
+        .await
+        .unwrap()
+        .response
+    else {
+        panic!("search output")
+    };
+    assert!(page.entries.is_empty());
+    drop(app);
+    drop(handle);
+    worker.await.unwrap();
+    assert_eq!(storage.state(), cmmr::State::Closed);
+}
+
+#[tokio::test]
+async fn a_new_attendance_fences_old_departures_and_heartbeats() {
+    let clock = Time::new();
+    let now = clock.now().unwrap() / 1000;
+    let (app, handle, worker, storage) = runtime(&clock);
+    bootstrap(&handle, now).await;
+    let alice = Fixture::new("alice", 1, now).await;
+    let old = enter(&app, &alice).await;
+    let current = enter(&app, &alice).await;
+    assert_ne!(old.session, current.session);
+    let replacement = storage.get("swb_alice").await.unwrap().unwrap();
+    for request in [
+        Request::Depart(DepartInput {
+            possession: possession(&old.session, 1),
+        }),
+        Request::Heartbeat(HeartbeatInput {
+            possession: possession(&old.session, 2),
+            expected_revision: old.revision,
+        }),
+    ] {
+        assert_eq!(
+            call(&app, signed(request, &alice)).await,
+            Err(ErrorCode::ResetRequired)
+        );
+        let retained = storage.get("swb_alice").await.unwrap().unwrap();
+        assert_eq!(retained.generation, replacement.generation);
+        assert_eq!(retained.revision, replacement.revision);
+    }
+    call(&app, search(&current.session, 1, &alice))
+        .await
+        .unwrap();
+    call(
+        &app,
+        signed(
+            Request::Depart(DepartInput {
+                possession: possession(&current.session, 2),
+            }),
+            &alice,
+        ),
+    )
+    .await
+    .unwrap();
+    assert!(storage.get("swb_alice").await.unwrap().is_none());
+    drop(app);
+    drop(handle);
+    worker.await.unwrap();
+    assert_eq!(storage.state(), cmmr::State::Closed);
+}
+
+#[tokio::test]
+async fn the_exclusive_presence_deadline_requires_a_new_attendance() {
+    let clock = Time::new();
+    let now = clock.now().unwrap() / 1000;
+    let (app, handle, worker, storage) = runtime(&clock);
+    bootstrap(&handle, now).await;
+    let alice = Fixture::new("alice", 1, now).await;
+    let old = enter(&app, &alice).await;
+    clock.advance(old.expires_at_ms - clock.now().unwrap() - 1);
+    call(&app, search(&old.session, 1, &alice)).await.unwrap();
+    clock.advance(1);
+    assert_eq!(
+        call(
+            &app,
+            signed(
+                Request::Heartbeat(HeartbeatInput {
+                    possession: possession(&old.session, 2),
+                    expected_revision: old.revision,
+                }),
+                &alice
+            )
+        )
+        .await,
+        Err(ErrorCode::ResetRequired)
+    );
+    assert!(storage.get("swb_alice").await.unwrap().is_none());
+    let current = enter(&app, &alice).await;
+    assert_ne!(old.session, current.session);
+    assert_eq!(current.expires_at_ms, clock.now().unwrap() + 10000);
+    call(&app, search(&current.session, 1, &alice))
+        .await
+        .unwrap();
+    drop(app);
+    drop(handle);
+    worker.await.unwrap();
+    assert_eq!(storage.state(), cmmr::State::Closed);
+}
+
+#[tokio::test]
+async fn real_http_admission_match_and_cancelled_mutation() {
+    let clock = Time::new();
+    let now = clock.now().unwrap() / 1000;
+    let (app, handle, worker, storage) = runtime(&clock);
     let alice = Fixture::new("alice", 1, now).await;
     let bob = Fixture::new("bob", 1, now).await;
     assert_eq!(

@@ -72,6 +72,9 @@ pub fn feed(now: u64, revision: u64, revoked: Value) -> Value {
 }
 impl Fixture {
     pub async fn new(member: &str, revision: u64, now: u64) -> Self {
+        Self::with_device(member, revision, now, 13).await
+    }
+    pub async fn with_device(member: &str, revision: u64, now: u64, seed: u8) -> Self {
         let mut issuer = issuer(now);
         let mut charter = cchr::Charter::new(cchr::Configuration {
             origin: "https://identity.example.test".into(),
@@ -87,7 +90,7 @@ impl Fixture {
                 now,
             )
             .unwrap();
-        let mut device = Device(SigningKey::from_bytes(&[13; 32]));
+        let mut device = Device(SigningKey::from_bytes(&[seed; 32]));
         let credential = sign(
             &mut issuer,
             Kind::Credential,
