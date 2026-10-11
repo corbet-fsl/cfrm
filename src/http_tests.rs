@@ -482,3 +482,31 @@ async fn a_stalled_owner_times_out_instead_of_holding_the_request() {
     assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
     assert_eq!(result(response).await, ErrorCode::Timeout);
 }
+
+#[tokio::test]
+async fn idle_source_and_session_keys_are_dropped_on_a_timer_until_the_router_ends() {
+    let mut value = limits();
+    value.source = Bucket {
+        burst: 1,
+        replenish: Duration::from_millis(2),
+        keys: 8,
+    };
+    value.session = value.source;
+    let config = Arc::new(Config::new(value, None).unwrap());
+    assert!(config.source.admit(&"192.0.2.1".parse().unwrap()));
+    assert!(config.session.admit(&vec![1]));
+    assert_eq!((config.source.tracked(), config.session.tracked()), (1, 1));
+    spawn_pruner(&config, Duration::from_millis(10));
+    for _ in 0..100 {
+        if config.source.tracked() + config.session.tracked() == 0 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!((config.source.tracked(), config.session.tracked()), (0, 0));
+    // The pruner ends once the configuration is gone.
+    let weak = Arc::downgrade(&config);
+    drop(config);
+    tokio::time::sleep(Duration::from_millis(50)).await;
+    assert!(weak.upgrade().is_none());
+}
