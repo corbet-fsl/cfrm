@@ -19,7 +19,7 @@ currentness and public punishment, complete client-version enforcement, member
 MLS and authenticated MCP hosting remain unfinished. No deployed Forum or
 complete higher-owner qualification is claimed.
 
-The former identity, accounting and SQL service implementation has been removed from the Rust door. Historical experiments are research only and are not a service or acceptance evidence. Existing bounded-body, concurrency, timeout and no-logging HTTP mechanisms informed the new adapter; current authorization belongs to the owning libraries.
+The former identity, accounting and SQL service implementation has been removed from the Rust door. The historical JavaScript experiments, studies and prototype documents were deleted on 2026-10-11 (they described durable member state, an operator-visible accounting ledger and administration routes that the Forum door does not have; Git history keeps them). Existing bounded-body, concurrency, timeout and no-logging HTTP mechanisms informed the new adapter; current authorization belongs to the owning libraries.
 
 ## Maintained dependencies
 
