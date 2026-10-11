@@ -28,8 +28,8 @@ fixture_snapshot=$(mktemp -d "$RUNNER_TEMP/cfrm-record-fixture.XXXXXXXX")
 export CBLC_BB
 CBLC_BB=$(python3 .ci/check-record-fixture.py \
   --directory "$fixture_cache_root/ccid-cached/08a9478e457e604aa31f9a54/release-artifacts/gather-record-fixture" \
-  --source d6014acbef63f4cd0929b20091884dd422421fc3 \
-  --metadata-sha256 7270351d40c1ed49b1499ec82e59449e6d28ca715d5590485dee56e7ef757ff2 \
+  --source 14688fa1bde3dfaab7c3d8b88adbf460800671df \
+  --metadata-sha256 57e7fe20d85f72037cc6c01a997bf5482f6d579695935fed79e9141f9dc655e0 \
   --output "$fixture_snapshot/capture")
 export CBLC_RECORD_EPOCH_FIXTURE="$fixture_snapshot/capture/gather-record-fixture.json"
 
