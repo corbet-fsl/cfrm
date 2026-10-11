@@ -118,7 +118,7 @@ impl Host {
                 room_epoch: runtime::RoomEpochConfiguration {
                     epoch: 1,
                     valid_from_ms: native.now * 1000,
-                    valid_until_ms: (native.now + 60) * 1000,
+                    valid_until_ms: (native.now + 3) * 1000,
                 },
                 rooms: cgth::cmbl::Limits {
                     connections: 4,

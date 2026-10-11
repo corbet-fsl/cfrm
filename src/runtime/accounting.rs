@@ -1,6 +1,12 @@
 //! Wire routing only. Gather owns the complete G1/device/native-record join.
 use super::*;
 use cgth::accounting::{self as owner, AccountGather, Read};
+mod rooms;
+
+pub(super) struct RoomHost<'a, S> {
+    pub storage: &'a S,
+    pub configuration: &'a Configuration,
+}
 
 pub(super) async fn execute<S, C, R, Q>(
     gather: &mut AccountGather<S, C, R, Q>,
@@ -9,9 +15,10 @@ pub(super) async fn execute<S, C, R, Q>(
     verification: &cswb::Verification<'_>,
     contact: &impl Fn(&str) -> cshm::ContactCheck,
     deadline: &mut u64,
+    rooms: RoomHost<'_, S>,
 ) -> Result<Output, ErrorCode>
 where
-    S: Store,
+    S: Store + Clone,
     C: Clock,
     R: cswb::Tokens,
     Q: cthl::Store,
@@ -87,6 +94,18 @@ where
                 current: &current,
             };
             match request {
+                Request::RoomEpoch(_) | Request::RoomIssue(_) => {
+                    rooms::member(
+                        gather,
+                        rooms,
+                        request,
+                        &current,
+                        verification,
+                        contact,
+                        deadline,
+                    )
+                    .await
+                }
                 Request::Heartbeat(input) => {
                     let value = gather
                         .heartbeat(read, revision(&input.expected_revision)?, verification)
@@ -188,7 +207,16 @@ where
                 _ => Err(ErrorCode::AuthorityUnavailable),
             }
         }
-        _ => Err(ErrorCode::AuthorityUnavailable),
+        _ => {
+            rooms::anonymous(
+                gather,
+                request,
+                verification,
+                rooms.configuration.room_epoch.valid_until_ms,
+                deadline,
+            )
+            .await
+        }
     }
 }
 

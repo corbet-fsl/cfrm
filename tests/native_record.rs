@@ -21,6 +21,8 @@ mod fixture;
 mod g1;
 #[path = "native_record/host.rs"]
 mod host;
+#[path = "native_record/rooms.rs"]
+mod rooms;
 use fixture::Fixture;
 use g1::G1;
 use host::{Delay, Host, call, exchange};

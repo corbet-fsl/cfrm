@@ -69,15 +69,24 @@ controller and HTTP boundary and check that refused requests create no attendanc
 
 ## Anonymous rooms and MCP
 
-The retained composition for `room_epoch` and `room_issue` uses
-CurrentDeviceSession and the original sealed Switchboard capability, with the
-original signed quota and common
-configured epoch. The latter carries only operation and original BlindRequest,
+The accounting composition for `room_epoch` and `room_issue` uses the actual
+current device session, native record proof and final presence revision, with
+the original signed quota and common configured epoch. Its entire lifetime fits
+the authenticated record and policy bounds. Issuance requires member authority
+through that common expiry. The latter carries only operation and original BlindRequest,
 never a room/hash/tag. All anonymous command inputs contain only the room owner's
 opaque pass and command. The registry marks those AnonymousRoomPass; they never include authenticated presence session
 credentials. Link owns both independent session classes. Assembly alone verifies
 permits; this projection does not define a blind-pass protocol or link rooms to
-members.
+members. Gather freezes the original descriptor, economic policy digest, quota
+and common permit lifetime. A metadata refresh cannot extend that lifetime;
+changing descriptor, policy or quota fences the original issuer. Anonymous use
+continues after presence departure but requires the current common accounting
+epoch and original permit, with an exclusive final deadline check. Losing the
+issuer anchor never creates a replacement in the same incarnation. MLS history
+handover remains unavailable until its original member capability is joined.
+These paths require actual native and transport qualification; source review
+alone does not establish runtime acceptance.
 
 `mcp_tools` projects the same action-bound Call schema used by HTTP. Its tools
 accept the full versioned Call as arguments. `execute_tool` checks the tool name

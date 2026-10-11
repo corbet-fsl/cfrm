@@ -167,13 +167,10 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
             _ => return Err(ErrorCode::AuthorityUnavailable),
         }
         .map_err(error)?;
-        // Anonymous room permits still need their complete original accounting
-        // join. Installing record verification does not enable those routes.
-        if matches!(&call.request, Request::RoomEpoch(_) | Request::RoomIssue(_))
-            || matches!(
-                call.request.info().requirement,
-                Requirement::AnonymousRoomPass
-            )
+        // Partial owners still refuse governed operations. Complete accounting
+        // routes retain their original per-operation joins; MLS handover has no
+        // corresponding owner capability and continues to refuse.
+        if matches!(&call.request, Request::RoomHandover(_))
             || (self.accounting.is_none()
                 && !matches!(
                     call.request.info().requirement,
@@ -220,6 +217,10 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
                     &verification,
                     &self.contact,
                     &mut authority_deadline,
+                    accounting::RoomHost {
+                        storage: &self.storage,
+                        configuration: &self.configuration,
+                    },
                 )
                 .await?
             }
@@ -244,10 +245,13 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
             )
             .await?
         };
-        let completed_at_ms = self
-            .clock
-            .now()
-            .map_err(|_| ErrorCode::AuthorityUnavailable)?;
+        let completed_at_ms = match &self.accounting {
+            Some(gather) => gather.observed_now().map_err(error)?,
+            None => self
+                .clock
+                .now()
+                .map_err(|_| ErrorCode::AuthorityUnavailable)?,
+        };
         if completed_at_ms < now_ms || completed_at_ms >= authority_deadline {
             return Err(ErrorCode::AuthorityUnavailable);
         }
