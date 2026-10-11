@@ -16,14 +16,28 @@ The candidate `runtime::Service` composes one Volatile handle, current Assurance
 and actual Gather children. `spawn` returns a concrete bounded Handle and worker;
 queued mutations complete after caller cancellation, and worker drop/panic fences
 the shared store. `router_with` consumes that Handle, never an accepting callback.
-Settings and credential-gated challenges delegate to their original owners.
-The runtime refuses admission, attendance and anonymous room actions with
-`AuthorityUnavailable` after cheap quota checks: Switchboard does not yet consume
-the accounting owner's mandatory minimum-frontier/currentness capability.
-This applies to the public Handle and HTTP controller, including valid device
-signatures and empty or nonempty record proofs. No configuration or test flag
-enables partial admission. The retained dispatch composition cannot authorize
-these actions until the original accounting relation is integrated.
+The unconfigured constructor exposes Settings and original credential challenges;
+it refuses every governed admission/attendance action. The native host requires
+explicit current Rulebook period key/value, issuer action, authenticated public
+artifact pin and bounded verifier execution. Its consuming `with_accounting`
+constructor installs the concrete Gather/Balance owner once. Fresh entry decodes
+an original record Presentation bound to the actual pending Challenge payload;
+replacement decodes the original public Record and proof. Device possession signs
+the unchanged complete request. No caller supplies a verifier or admission verdict.
+Gather retains the exact verified public evidence only in expiring attendance,
+rechecks cached records before disclosure, and excludes invalid candidates before
+cursor observations. The serial actor retains current Charter authority through
+native verification and each final storage cut. Room actions remain explicitly
+unavailable until their common-epoch accounting join is complete.
+
+The native executable uses two Tokio workers, with one serial Forum actor and one
+native proof operation at a time. `shutdown_ms` is the graceful command-drain
+budget. At its expiry the host fences storage, permanently cancels the native
+owner, aborts the actor and joins cleanup. The original process owner kills and
+reaps its subprocess before joining pipe threads. This prevents waiting for the
+full proof timeout; it is not a hard operating-system wall-clock guarantee.
+Source review is complete; genuine native/transport and coverage qualification
+remain pending and must use the actual retained four-circuit fixture.
 The unsigned request transcript includes the canonical versioned action and every
 input except its signature. Ciphertext's requested Profile revision is eight-byte
 big-endian; attendance storage revisions are exact sixteen-byte tokens.

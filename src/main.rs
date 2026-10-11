@@ -3,7 +3,7 @@
 mod serve;
 
 #[cfg(not(target_arch = "wasm32"))]
-#[tokio::main(flavor = "current_thread")]
+#[tokio::main(flavor = "multi_thread", worker_threads = 2)]
 async fn main() -> std::process::ExitCode {
     use clap::Parser;
     if serve::run(serve::Arguments::parse()).await.is_ok() {

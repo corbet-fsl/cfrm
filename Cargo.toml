@@ -12,7 +12,7 @@ default = ["server"]
 client-http = ["dep:reqwest"]
 client-browser = ["dep:gloo-timers", "dep:web-sys", "dep:wasm-bindgen", "dep:wasm-bindgen-futures", "dep:js-sys"]
 server = ["dep:axum", "dep:tokio", "dep:cgth", "dep:csrn", "dep:cvtl", "dep:cshm"]
-serve = ["server", "csrn/http", "dep:clap", "dep:getrandom", "dep:redis", "tokio/signal"]
+serve = ["server", "csrn/http", "dep:clap", "dep:getrandom", "dep:redis", "tokio/signal", "tokio/rt-multi-thread"]
 
 [[bin]]
 name = "cfrm"
@@ -35,7 +35,7 @@ reqwest = { version = "0.12", optional = true, default-features = false, feature
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "json", "tokio"] }
 tokio = { version = "1", optional = true, features = ["rt", "time", "sync", "net", "macros"] }
 
-cgth = { git = "https://git.corbet.ch/corbet-libs/cgth.git", branch = "v01", features = ["issuer"], optional = true }
+cgth = { git = "https://git.corbet.ch/corbet-libs/cgth.git", branch = "v01", features = ["issuer", "accounting"], optional = true }
 csrn = { git = "https://git.corbet.ch/corbet-libs/csrn.git", branch = "v01", optional = true }
 cvtl = { git = "https://git.corbet.ch/corbet-libs/cvtl.git", branch = "v01", optional = true }
 cshm = { git = "https://git.corbet.ch/corbet-foss/cshm", branch = "main", optional = true }

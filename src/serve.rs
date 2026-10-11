@@ -15,6 +15,8 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+mod accounting;
+
 #[derive(clap::Parser)]
 pub struct Arguments {
     #[command(subcommand)]
@@ -34,6 +36,8 @@ enum Command {
 struct Configuration {
     bind: SocketAddr,
     community: String,
+    admission_action: String,
+    accounting: accounting::Configuration,
     incarnation: String,
     hosts: Vec<String>,
     origins: Vec<String>,
@@ -69,6 +73,7 @@ struct Configuration {
     http_body_timeout_ms: u64,
     command_capacity: usize,
     maintenance_ms: u64,
+    /// Graceful command-drain budget. Forced cleanup cancels and reaps native work.
     shutdown_ms: u64,
     throttle_capacity: NonZeroUsize,
     throttle: BTreeMap<String, Rate>,
@@ -224,6 +229,14 @@ async fn serve<Q: cthl::Store + 'static>(
     }
     let throttle = cthl::Throttle::new(&configuration.community, rates, quota)
         .map_err(|_| ErrorCode::InvalidRequest)?;
+    let native = configuration.accounting.verifier()?;
+    let cancellation = native.cancellation();
+    let record_limits = configuration.accounting.limits();
+    let record_configuration = cgth::accounting::Configuration {
+        community: configuration.community.clone(),
+        period_key: configuration.accounting.period_key,
+        period_seconds: configuration.accounting.period_seconds,
+    };
     let service = runtime::Service::new(
         assurance,
         runtime::Parts {
@@ -235,7 +248,7 @@ async fn serve<Q: cthl::Store + 'static>(
         runtime::Configuration {
             community: configuration.community,
             incarnation: configuration.incarnation,
-            admission_action: "community.admit".into(),
+            admission_action: configuration.admission_action,
             origins: configuration.origins.clone(),
             maximum_snapshot_age: configuration.maximum_snapshot_age,
             request_bytes: configuration.request_bytes,
@@ -260,6 +273,7 @@ async fn serve<Q: cthl::Store + 'static>(
         },
         |_: &str| cshm::ContactCheck::Unavailable,
     )?;
+    let service = service.with_accounting(record_configuration, native, record_limits)?;
     // No accepting detector is substituted: restricted public text stays refused
     // until an original contact detector can be supplied by the service owner.
     let (handle, mut worker) = service.spawn(
@@ -307,6 +321,9 @@ async fn serve<Q: cthl::Store + 'static>(
             }
             Err(_) => {
                 storage.close();
+                // Tokio abort cannot preempt synchronous native polling. Revoke
+                // its actual process owner first; it kills/reaps before yielding.
+                cancellation.cancel();
                 worker.abort();
                 let _ = worker.await;
                 return Err(ErrorCode::AuthorityUnavailable);
