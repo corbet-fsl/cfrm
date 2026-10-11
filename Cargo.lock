@@ -284,7 +284,7 @@ checksum = "82f6aeea286b8eb4dd3431a1be1b59d290ace00f5bfd8e2a159bc2a05e2c1667"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -569,7 +569,7 @@ dependencies = [
  "proc-macro-crate",
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -648,9 +648,10 @@ dependencies = [
 [[package]]
 name = "cblc"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-libs/cblc?branch=main#5fb42f94a8062d0cecc9be64dcaa48775f39b81f"
+source = "git+https://git.corbet.ch/corbet-libs/cblc?branch=main#b3199a85a05e7c4f060a0e19ec8d19ffc8f63abc"
 dependencies = [
  "cbcn",
+ "cmbl",
  "cpns",
  "csgn",
  "cssr",
@@ -662,6 +663,7 @@ dependencies = [
  "futures",
  "getrandom 0.4.3",
  "hpke",
+ "p256",
  "rand 0.10.3",
  "rand_chacha 0.10.0",
  "rand_core 0.10.1",
@@ -674,9 +676,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.7.0"
+version = "1.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50a649af8a827553c29fb0cb4bd4a6f1a0dd695bd3232b9bc98bd9c8a3ffbb8b"
+checksum = "6651c9ed80effdc7db0ff72512157f901af5e3549e341e24b1dd4887d836d838"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -807,7 +809,7 @@ dependencies = [
 [[package]]
 name = "cgth"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-libs/cgth.git?branch=v01#1cef03c8e29194c6e74a1cb2b64fed9f7f5df863"
+source = "git+https://git.corbet.ch/corbet-libs/cgth.git?branch=v01#e3f5f8df18d98761e972aa21e10d60c418a8b145"
 dependencies = [
  "cbcn",
  "cblc",
@@ -906,7 +908,7 @@ dependencies = [
 [[package]]
 name = "ckmg"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/ckmg.git?branch=v01#1a7ca7ca4e304ff9f7f3165073e37c8e447c7800"
+source = "git+https://git.corbet.ch/corbet-foss/ckmg.git?branch=v01#15bb5691985a92402a1f8831933c0b80fd85dd53"
 dependencies = [
  "blake3",
  "cdht",
@@ -931,7 +933,7 @@ dependencies = [
 [[package]]
 name = "ckyh"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/ckyh?branch=main#39a0c854e45c6b4055e6df5103013a024e248a70"
+source = "git+https://git.corbet.ch/corbet-foss/ckyh?branch=main#e33e6d73f0a821b21f09cd619e562ac824745416"
 dependencies = [
  "ciborium",
  "csgn",
@@ -986,7 +988,7 @@ dependencies = [
  "heck 0.5.0",
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -1022,7 +1024,7 @@ dependencies = [
 [[package]]
 name = "cmbl"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01#6b099d520f377c98fa07d8f5afe7c4fadba6b28c"
+source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01#98a33ea9b95f96e872f577820a6047be902a1a44"
 dependencies = [
  "blake3",
  "blind-rsa-signatures",
@@ -1072,7 +1074,7 @@ dependencies = [
 [[package]]
 name = "cnvy"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cnvy.git?branch=v01#8baf81f7d09b877e2db06d1a318504d42af6c224"
+source = "git+https://git.corbet.ch/corbet-foss/cnvy.git?branch=v01#628c690a5ac123fd58cd74b9e6f7188f6a7d315b"
 dependencies = [
  "cchr",
  "reqwest 0.12.28",
@@ -1253,7 +1255,7 @@ dependencies = [
 [[package]]
 name = "crbk"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/crbk?branch=main#c190d95abb3cd152f129467f6916226bebb80be0"
+source = "git+https://git.corbet.ch/corbet-foss/crbk?branch=main#b9dba4d1f867bc1a3439f4ede6b4fdb2290cd692"
 dependencies = [
  "semver",
  "serde",
@@ -1376,7 +1378,7 @@ dependencies = [
 [[package]]
 name = "cssr"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/cssr?branch=main#d519df2e9538a3c5ce50f8727eb56ed98395cabb"
+source = "git+https://git.corbet.ch/corbet-foss/cssr?branch=main#248daf5a40a0e6525ebe3d7b7d7b24ce4da01ab4"
 dependencies = [
  "crlt",
  "czkp",
@@ -1531,12 +1533,13 @@ dependencies = [
 [[package]]
 name = "czkp"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#d0b0169671ecc09e9dc1979f762b9a917e10cfaa"
+source = "git+https://git.corbet.ch/corbet-foss/czkp?branch=main#20a60821a96d46d0f57b9f5de6f5e7c8b5a73a3c"
 dependencies = [
  "ark-bn254",
  "ark-ff",
  "data-encoding",
  "ed25519-dalek 3.0.0",
+ "p256",
  "pso-poseidon",
  "rs_merkle",
  "serde",
@@ -1657,7 +1660,7 @@ checksum = "c6232dd377dcc64799954cbd3a9bb882e9cdc1308ccd87b1c098f1fb2eaf82a8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -1821,7 +1824,7 @@ checksum = "a65863d15a4ce2888bd2f0f543cc963d3879c3a022c8ee43f6141d479a3ac815"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -2055,7 +2058,7 @@ checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -3758,7 +3761,7 @@ checksum = "92ecd8964f8453721699a1ed72037b0db49ce2f5a5138486ee89bed6f67cdf3a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -4167,7 +4170,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "serde_derive_internals",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -4255,7 +4258,7 @@ checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -4266,15 +4269,16 @@ checksum = "f852137cce035d6a4df67ccce505ff6b3e9fd3a10e3e52b24dc71e650bb1a9bd"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
 name = "serde_json"
-version = "1.0.152"
+version = "1.0.154"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1741ab7a6cc54a03a89b5d563ed60075c277d9e3cfa73ad0c1f23f23974703c6"
+checksum = "e7e9cc8b1b85264074fbcc02a88680c4096b1e47df8f739dceb03bf482f04bd6"
 dependencies = [
+ "foldhash",
  "indexmap",
  "itoa",
  "memchr",
@@ -4481,7 +4485,7 @@ checksum = "2905ae8e8148d8f7f5748ea95d1e949fa4fc1d7f5161547b758ad118b2e4b0aa"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -4571,9 +4575,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "3.0.7"
+version = "3.0.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d62a2e0561533f2ca2561d0cf27fd9fedb640a1bf2616ff5d5c80d99017faadc"
+checksum = "01016da373cd8f7ef12624f796309f5c31ba8d646dd08856c02cd741d823c622"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4597,7 +4601,7 @@ checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -4659,7 +4663,7 @@ checksum = "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -4702,7 +4706,7 @@ checksum = "78773a2a397f451582ce068015985c33193cf6dea8b74d2a639fe457b2f07b0e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -5107,7 +5111,7 @@ dependencies = [
  "bumpalo",
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
  "wasm-bindgen-shared",
 ]
 
@@ -5150,7 +5154,7 @@ checksum = "3b84b5ac638bfb168196a1a461fcc8f46a294a18b1b6be52133b4e0db122cc9f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
@@ -5460,7 +5464,7 @@ checksum = "ec8ebde2db3681e8c9980cc27822030e68752690ddfa9473e739aeb4dbde6d71"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
  "synstructure",
 ]
 
@@ -5522,7 +5526,7 @@ checksum = "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
  "synstructure",
 ]
 
@@ -5576,7 +5580,7 @@ checksum = "34df6fc39dbd26ddc9c10e6a2984476e13acce22e64e4487636ef494369225da"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 3.0.7",
+ "syn 3.0.8",
 ]
 
 [[package]]
