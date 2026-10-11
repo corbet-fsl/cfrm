@@ -163,7 +163,11 @@ impl Host {
                 origins: vec![g1::ORIGIN.into()],
                 body_bytes: 1_048_576,
                 concurrent: 8,
+                anonymous_concurrent: 2,
                 body_timeout: Duration::from_secs(30),
+                request_timeout: Duration::from_secs(120),
+                source: cfrm::bucket::Bucket { burst: 100_000, replenish: Duration::from_millis(1), keys: 16 },
+                session: cfrm::bucket::Bucket { burst: 100_000, replenish: Duration::from_millis(1), keys: 1024 },
             },
             handle.clone(),
         )

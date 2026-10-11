@@ -70,7 +70,14 @@ struct Configuration {
     room_operation_receipts: usize,
     request_bytes: usize,
     http_concurrent: usize,
+    /// Share of `http_concurrent` reserved for pre-session actions.
+    http_anonymous_concurrent: usize,
     http_body_timeout_ms: u64,
+    /// Bound for one owner call; slow owners cannot hold a connection longer.
+    http_request_timeout_ms: u64,
+    /// RAM-only per-source and per-session token buckets.
+    source_bucket: BucketConfiguration,
+    session_bucket: BucketConfiguration,
     command_capacity: usize,
     maintenance_ms: u64,
     /// Graceful command-drain budget. Forced cleanup cancels and reaps native work.
@@ -83,6 +90,22 @@ struct Configuration {
 enum Storage {
     Memory,
     Valkey { url: String, timeout_ms: u64 },
+}
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct BucketConfiguration {
+    burst: u32,
+    replenish_ms: u64,
+    keys: usize,
+}
+impl BucketConfiguration {
+    fn bucket(&self) -> cfrm::bucket::Bucket {
+        cfrm::bucket::Bucket {
+            burst: self.burst,
+            replenish: Duration::from_millis(self.replenish_ms),
+            keys: self.keys,
+        }
+    }
 }
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -153,6 +176,7 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
             if timeout.is_zero() || timeout > Duration::from_secs(60) {
                 return Err(ErrorCode::InvalidRequest);
             }
+            runtime::valkey::check_url(url)?;
             let client =
                 redis::Client::open(url.as_str()).map_err(|_| ErrorCode::InvalidRequest)?;
             let connection =
@@ -169,8 +193,10 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
                 .map_err(|_| ErrorCode::AuthorityUnavailable)?
         }
     };
+    // Persistent state is refused; an unreadable setting is only reported.
+    runtime::valkey::check_persistence(storage.warnings())?;
     if !storage.warnings().is_empty() {
-        eprintln!("forum volatile storage persistence is enabled or unknown");
+        eprintln!("forum volatile storage persistence could not be verified");
     }
     match &storage {
         cvtl::Volatile::Memory(_) => {
@@ -286,7 +312,11 @@ async fn serve<Q: cthl::Store + 'static>(
             origins: configuration.origins,
             body_bytes: configuration.request_bytes,
             concurrent: configuration.http_concurrent,
+            anonymous_concurrent: configuration.http_anonymous_concurrent,
             body_timeout: Duration::from_millis(configuration.http_body_timeout_ms),
+            request_timeout: Duration::from_millis(configuration.http_request_timeout_ms),
+            source: configuration.source_bucket.bucket(),
+            session: configuration.session_bucket.bucket(),
         },
         handle.clone(),
     )?;
@@ -295,7 +325,11 @@ async fn serve<Q: cthl::Store + 'static>(
         .map_err(|_| ErrorCode::Transport)?;
     let (outcome, finished) = {
         let feed = follow(handle.clone(), transport, clock);
-        let server = axum::serve(listener, app).into_future();
+        let server = axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .into_future();
         tokio::pin!(feed, server);
         tokio::select! {
             result = &mut worker => { let _ = result; (Err(ErrorCode::AuthorityUnavailable), true) },

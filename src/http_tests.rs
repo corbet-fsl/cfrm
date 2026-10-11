@@ -3,13 +3,24 @@ use crate::*;
 use axum::{body::Body, extract::Request};
 use tower::ServiceExt;
 
+fn bucket(burst: u32) -> Bucket {
+    Bucket {
+        burst,
+        replenish: Duration::from_millis(1),
+        keys: 16,
+    }
+}
 fn limits() -> Limits {
     Limits {
         hosts: vec!["api.example.test".into()],
         origins: vec!["https://example.test".into()],
         body_bytes: 4096,
-        concurrent: 2,
+        concurrent: 3,
+        anonymous_concurrent: 2,
         body_timeout: Duration::from_millis(20),
+        request_timeout: Duration::from_millis(20),
+        source: bucket(1000),
+        session: bucket(1000),
     }
 }
 fn call() -> Call {
@@ -139,13 +150,17 @@ async fn size_version_json_timeout_and_concurrency_are_bounded() {
         .await,
         ErrorCode::Timeout
     );
-    let config = Arc::new(Config {
-        limits: limits(),
-        concurrent: Semaphore::new(0),
-        controller: None,
-    });
+    let mut config = Config::new(limits(), None).unwrap();
+    config.anonymous = Semaphore::new(0);
     assert_eq!(
-        result(handle(State(config), request("/v1/challenge", Body::empty())).await).await,
+        result(
+            handle(
+                State(Arc::new(config)),
+                request("/v1/challenge", Body::empty())
+            )
+            .await
+        )
+        .await,
         ErrorCode::Capacity
     );
     assert!(matches!(Call::decode(&[0; 5], 4), Err(ErrorCode::TooLarge)));
@@ -153,7 +168,7 @@ async fn size_version_json_timeout_and_concurrency_are_bounded() {
 
 #[test]
 fn configuration_rejects_ambiguous_or_missing_boundaries() {
-    for mode in 0..8 {
+    for mode in 0..14 {
         let mut value = limits();
         match mode {
             0 => value.hosts.clear(),
@@ -163,6 +178,12 @@ fn configuration_rejects_ambiguous_or_missing_boundaries() {
             4 => value.concurrent = 0,
             5 => value.concurrent = 4097,
             6 => value.body_timeout = Duration::ZERO,
+            7 => value.anonymous_concurrent = 0,
+            8 => value.anonymous_concurrent = value.concurrent,
+            9 => value.request_timeout = Duration::ZERO,
+            10 => value.source.burst = 0,
+            11 => value.session.keys = 0,
+            12 => value.source.replenish = Duration::ZERO,
             _ => value.hosts = vec!["%".into()],
         }
         assert!(router(value).is_err());
@@ -327,4 +348,137 @@ async fn browser_preflight_is_exact_scoped_and_does_not_share_credentials() {
     );
     assert_eq!(response.headers()[header::VARY], "Origin");
     assert_eq!(result(response).await, ErrorCode::AuthorityUnavailable);
+}
+
+fn search(session: Vec<u8>) -> Call {
+    Call::new(crate::Request::Search(SearchInput {
+        possession: Possession {
+            session,
+            request_nonce: vec![1],
+            signature: vec![2],
+        },
+        cursor: None,
+        page_size: 1,
+    }))
+}
+fn from(request: Request, address: &str) -> Request {
+    let mut request = request;
+    request
+        .extensions_mut()
+        .insert(ConnectInfo(address.parse::<SocketAddr>().unwrap()));
+    request
+}
+
+#[test]
+fn sources_are_normalised_before_they_select_a_bucket() {
+    let key = |address: Option<&str>| {
+        let mut req = request("/v1/challenge", Body::empty());
+        if let Some(address) = address {
+            req = from(req, address);
+        }
+        source(&req)
+    };
+    assert_eq!(key(None), IpAddr::V4(Ipv4Addr::UNSPECIFIED));
+    assert_eq!(
+        key(Some("192.0.2.7:1")),
+        "192.0.2.7".parse::<IpAddr>().unwrap()
+    );
+    assert_eq!(key(Some("[::ffff:192.0.2.7]:1")), key(Some("192.0.2.7:9")));
+    // Every address of one IPv6 /64 shares a bucket; another /64 does not.
+    assert_eq!(
+        key(Some("[2001:db8:1:2::1]:1")),
+        key(Some("[2001:db8:1:2:ffff::9]:2"))
+    );
+    assert_ne!(
+        key(Some("[2001:db8:1:2::1]:1")),
+        key(Some("[2001:db8:1:3::1]:1"))
+    );
+}
+
+#[tokio::test]
+async fn one_source_cannot_exhaust_the_others_and_is_limited_before_any_work() {
+    let mut value = limits();
+    value.source = Bucket {
+        burst: 1,
+        replenish: Duration::from_secs(3600),
+        keys: 4,
+    };
+    let app = router(value).unwrap();
+    let body = serde_json::to_vec(&call()).unwrap();
+    let send = |address: &'static str| {
+        let app = app.clone();
+        let body = body.clone();
+        async move {
+            result(
+                app.oneshot(from(request("/v1/challenge", body), address))
+                    .await
+                    .unwrap(),
+            )
+            .await
+        }
+    };
+    assert_eq!(send("192.0.2.1:1").await, ErrorCode::AuthorityUnavailable);
+    assert_eq!(send("192.0.2.1:2").await, ErrorCode::Capacity);
+    assert_eq!(send("192.0.2.2:1").await, ErrorCode::AuthorityUnavailable);
+}
+
+#[tokio::test]
+async fn anonymous_and_authenticated_capacity_are_separate_pools() {
+    let mut config = Config::new(limits(), None).unwrap();
+    config.authenticated = Semaphore::new(0);
+    let config = Arc::new(config);
+    // Authenticated actions are refused while pre-session actions still run.
+    let body = serde_json::to_vec(&search(vec![1; 16])).unwrap();
+    assert_eq!(
+        result(handle(State(config.clone()), request("/v1/search", body)).await).await,
+        ErrorCode::Capacity
+    );
+    let body = serde_json::to_vec(&call()).unwrap();
+    assert_eq!(
+        result(handle(State(config.clone()), request("/v1/challenge", body)).await).await,
+        ErrorCode::AuthorityUnavailable
+    );
+    let mut config = Config::new(limits(), None).unwrap();
+    config.anonymous = Semaphore::new(0);
+    let body = serde_json::to_vec(&search(vec![1; 16])).unwrap();
+    assert_eq!(
+        result(handle(State(Arc::new(config)), request("/v1/search", body)).await).await,
+        ErrorCode::AuthorityUnavailable
+    );
+}
+
+#[tokio::test]
+async fn one_session_cannot_create_unbounded_replay_state() {
+    let mut value = limits();
+    value.session = Bucket {
+        burst: 2,
+        replenish: Duration::from_secs(3600),
+        keys: 4,
+    };
+    let app = router(value).unwrap();
+    let send = |session: Vec<u8>| {
+        let app = app.clone();
+        async move {
+            let body = serde_json::to_vec(&search(session)).unwrap();
+            result(app.oneshot(request("/v1/search", body)).await.unwrap()).await
+        }
+    };
+    assert_eq!(send(vec![1; 16]).await, ErrorCode::AuthorityUnavailable);
+    assert_eq!(send(vec![1; 16]).await, ErrorCode::AuthorityUnavailable);
+    assert_eq!(send(vec![1; 16]).await, ErrorCode::Capacity);
+    assert_eq!(send(vec![2; 16]).await, ErrorCode::AuthorityUnavailable);
+    assert_eq!(
+        send(vec![3; SESSION_BYTES + 1]).await,
+        ErrorCode::InvalidRequest
+    );
+}
+
+#[tokio::test]
+async fn a_stalled_owner_times_out_instead_of_holding_the_request() {
+    let (controller, _owner) = crate::runtime::Handle::stalled();
+    let app = router_with(limits(), controller).unwrap();
+    let body = serde_json::to_vec(&call()).unwrap();
+    let response = app.oneshot(request("/v1/challenge", body)).await.unwrap();
+    assert_eq!(response.status(), StatusCode::REQUEST_TIMEOUT);
+    assert_eq!(result(response).await, ErrorCode::Timeout);
 }

@@ -764,6 +764,7 @@ dependencies = [
  "futures-util",
  "getrandom 0.4.3",
  "gloo-timers",
+ "governor",
  "http-body-util",
  "js-sys",
  "redis",
