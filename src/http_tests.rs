@@ -510,3 +510,34 @@ async fn idle_source_and_session_keys_are_dropped_on_a_timer_until_the_router_en
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert!(weak.upgrade().is_none());
 }
+
+#[tokio::test]
+async fn a_full_source_table_throttles_new_sources_together_instead_of_locking_out() {
+    let mut value = limits();
+    value.source = Bucket {
+        burst: 1,
+        replenish: Duration::from_secs(3600),
+        keys: 1,
+    };
+    let app = router(value).unwrap();
+    let body = serde_json::to_vec(&call()).unwrap();
+    let send = |address: &'static str| {
+        let app = app.clone();
+        let body = body.clone();
+        async move {
+            result(
+                app.oneshot(from(request("/v1/challenge", body), address))
+                    .await
+                    .unwrap(),
+            )
+            .await
+        }
+    };
+    // The attacker's address fills the one-key table and is then limited.
+    assert_eq!(send("192.0.2.1:1").await, ErrorCode::AuthorityUnavailable);
+    assert_eq!(send("192.0.2.1:2").await, ErrorCode::Capacity);
+    // A legitimate new source still passes once at the shared overflow rate;
+    // further new sources are throttled together.
+    assert_eq!(send("192.0.2.2:1").await, ErrorCode::AuthorityUnavailable);
+    assert_eq!(send("192.0.2.3:1").await, ErrorCode::Capacity);
+}
