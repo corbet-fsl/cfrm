@@ -34,12 +34,23 @@ impl<K: Hash + Eq + Clone> Keyed<K> {
         })
     }
 
+    /// Drop every fully replenished (idle) key. Keys are never logged, printed
+    /// or exported: this type has no `Debug` and exposes only a count.
+    pub fn prune(&self) {
+        self.limiter.retain_recent();
+        self.limiter.shrink_to_fit();
+    }
+
+    /// Number of keys currently tracked.
+    pub fn tracked(&self) -> usize {
+        self.limiter.len()
+    }
+
     /// Spend one token. A full table first drops fully replenished keys; when it
     /// is still full every key is refused (fail closed) instead of growing.
     pub fn admit(&self, key: &K) -> bool {
         if self.limiter.len() >= self.keys {
-            self.limiter.retain_recent();
-            self.limiter.shrink_to_fit();
+            self.prune();
             if self.limiter.len() >= self.keys {
                 return false;
             }
@@ -77,6 +88,20 @@ mod tests {
         assert!(keyed.admit(&1));
         assert!(!keyed.admit(&1));
         assert!(keyed.admit(&2));
+    }
+
+    #[test]
+    fn an_idle_key_is_evicted_by_pruning() {
+        let keyed = Keyed::new(bucket(1, Duration::from_millis(2), 8)).unwrap();
+        assert!(keyed.admit(&1u8));
+        assert!(keyed.admit(&2));
+        assert_eq!(keyed.tracked(), 2);
+        keyed.prune();
+        // Still limited, so still tracked.
+        assert_eq!(keyed.tracked(), 2);
+        std::thread::sleep(Duration::from_millis(30));
+        keyed.prune();
+        assert_eq!(keyed.tracked(), 0);
     }
 
     #[test]

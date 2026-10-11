@@ -20,6 +20,9 @@ use std::{
 };
 use tokio::sync::Semaphore;
 
+/// How often idle source and session keys are dropped from RAM.
+const PRUNE_INTERVAL: Duration = Duration::from_secs(30);
+
 /// Longest session identifier a bucket will track; longer values are refused
 /// before any owner work.
 const SESSION_BYTES: usize = 64;
@@ -77,6 +80,23 @@ impl Config {
             limits,
         })
     }
+}
+
+/// Drop idle keys on a timer for as long as the configuration lives. The task
+/// holds only a weak reference, so it ends with the router.
+fn spawn_pruner(config: &Arc<Config>, every: Duration) {
+    let config = Arc::downgrade(config);
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(every);
+        loop {
+            interval.tick().await;
+            let Some(config) = config.upgrade() else {
+                break;
+            };
+            config.source.prune();
+            config.session.prune();
+        }
+    });
 }
 
 /// IPv4-mapped IPv6 collapses to IPv4 and other IPv6 addresses to their /64, so
@@ -143,6 +163,11 @@ fn configured(
         }
     }
     let state = Arc::new(Config::new(limits, controller)?);
+    // Without a runtime (in-process use) idle keys are still dropped whenever a
+    // full table is hit.
+    if tokio::runtime::Handle::try_current().is_ok() {
+        spawn_pruner(&state, PRUNE_INTERVAL);
+    }
     let mut router = Router::new();
     for action in actions() {
         router = router.route(
