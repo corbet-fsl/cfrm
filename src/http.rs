@@ -1,27 +1,104 @@
 //! Bounded HTTP adapter. No access logger, durable storage or proxy-header trust.
-use crate::{Call, ErrorCode, Failure, actions, execute};
+use crate::{
+    Call, ErrorCode, Failure, Requirement, actions,
+    bucket::{Bucket, Keyed},
+    execute,
+};
 use axum::{
     Router,
     body::to_bytes,
-    extract::{Request, State},
+    extract::{ConnectInfo, Request, State},
     http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::post,
 };
-use std::{sync::Arc, time::Duration};
+use std::{
+    collections::BTreeSet,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    sync::Arc,
+    time::Duration,
+};
 use tokio::sync::Semaphore;
+
+/// Longest session identifier a bucket will track; longer values are refused
+/// before any owner work.
+const SESSION_BYTES: usize = 64;
 
 pub struct Limits {
     pub hosts: Vec<String>,
     pub origins: Vec<String>,
     pub body_bytes: usize,
+    /// Total in-flight requests. `anonymous_concurrent` of them are reserved for
+    /// pre-session actions, the rest serve current device sessions only.
     pub concurrent: usize,
+    pub anonymous_concurrent: usize,
     pub body_timeout: Duration,
+    /// Bound for the whole owner call after the body was read.
+    pub request_timeout: Duration,
+    /// Per network source (IPv4 address or IPv6 /64), RAM only.
+    pub source: Bucket,
+    /// Per session identifier, which bounds the replay markers one session can
+    /// create within an authority interval. RAM only.
+    pub session: Bucket,
 }
 struct Config {
     limits: Limits,
-    concurrent: Semaphore,
+    anonymous: Semaphore,
+    authenticated: Semaphore,
+    anonymous_actions: BTreeSet<&'static str>,
+    source: Keyed<IpAddr>,
+    session: Keyed<Vec<u8>>,
     controller: Option<crate::runtime::Handle>,
+}
+impl Config {
+    fn new(limits: Limits, controller: Option<crate::runtime::Handle>) -> Result<Self, ErrorCode> {
+        if limits.concurrent == 0
+            || limits.concurrent > 4096
+            || limits.anonymous_concurrent == 0
+            || limits.anonymous_concurrent >= limits.concurrent
+            || limits.body_timeout.is_zero()
+            || limits.request_timeout.is_zero()
+        {
+            return Err(ErrorCode::InvalidRequest);
+        }
+        let source = Keyed::new(limits.source).ok_or(ErrorCode::InvalidRequest)?;
+        let session = Keyed::new(limits.session).ok_or(ErrorCode::InvalidRequest)?;
+        Ok(Self {
+            anonymous: Semaphore::new(limits.anonymous_concurrent),
+            authenticated: Semaphore::new(limits.concurrent - limits.anonymous_concurrent),
+            anonymous_actions: actions()
+                .into_iter()
+                .filter(|action| action.requirement != Requirement::CurrentDeviceSession)
+                .map(|action| action.name)
+                .collect(),
+            source,
+            session,
+            controller,
+            limits,
+        })
+    }
+}
+
+/// IPv4-mapped IPv6 collapses to IPv4 and other IPv6 addresses to their /64, so
+/// one subscriber cannot take a fresh bucket per address. Without connection
+/// information (in-process use) all requests share one bucket.
+fn source(request: &Request) -> IpAddr {
+    match request
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|info| info.0.ip())
+    {
+        Some(IpAddr::V6(ip)) => match ip.to_ipv4_mapped() {
+            Some(mapped) => IpAddr::V4(mapped),
+            None => {
+                let mut octets = ip.octets();
+                octets[8..].fill(0);
+                IpAddr::V6(octets.into())
+            }
+        },
+        Some(ip) => ip,
+        None => IpAddr::V4(Ipv4Addr::UNSPECIFIED),
+    }
 }
 
 pub fn router(limits: Limits) -> Result<Router, ErrorCode> {
@@ -43,9 +120,6 @@ fn configured(
         || limits.origins.is_empty()
         || limits.body_bytes == 0
         || limits.body_bytes > 1_048_576
-        || limits.concurrent == 0
-        || limits.concurrent > 4096
-        || limits.body_timeout.is_zero()
     {
         return Err(ErrorCode::InvalidRequest);
     }
@@ -68,11 +142,7 @@ fn configured(
             return Err(ErrorCode::Origin);
         }
     }
-    let state = Arc::new(Config {
-        concurrent: Semaphore::new(limits.concurrent),
-        controller,
-        limits,
-    });
+    let state = Arc::new(Config::new(limits, controller)?);
     let mut router = Router::new();
     for action in actions() {
         router = router.route(
@@ -179,10 +249,20 @@ async fn handle_allowed(config: Arc<Config>, request: Request) -> Response {
     if !exact_header(&request, header::CONTENT_TYPE, &["application/json".into()]) {
         return reject(ErrorCode::MediaType);
     }
-    let Ok(_permit) = config.concurrent.try_acquire() else {
+    // Cheapest refusal first: the per-source bucket runs before a permit, the
+    // body read or any owner work.
+    if !config.source.admit(&source(&request)) {
+        return reject(ErrorCode::Capacity);
+    }
+    let path = request.uri().path().to_owned();
+    // Pre-session actions cannot starve current device sessions.
+    let pool = match path.strip_prefix("/v1/") {
+        Some(name) if config.anonymous_actions.contains(name) => &config.anonymous,
+        _ => &config.authenticated,
+    };
+    let Ok(_permit) = pool.try_acquire() else {
         return reject(ErrorCode::Capacity);
     };
-    let path = request.uri().path().to_owned();
     let origin = request.headers()[header::ORIGIN]
         .to_str()
         .expect("validated exact origin")
@@ -204,8 +284,26 @@ async fn handle_allowed(config: Arc<Config>, request: Request) -> Response {
     if path != format!("/v1/{}", call.request.info().name) {
         return reject(ErrorCode::InvalidRequest);
     }
+    if let Some(possession) = call.request.possession() {
+        if possession.session.len() > SESSION_BYTES {
+            return reject(ErrorCode::InvalidRequest);
+        }
+        if !config.session.admit(&possession.session) {
+            return reject(ErrorCode::Capacity);
+        }
+    }
     let result = match &config.controller {
-        Some(controller) => controller.execute(origin, call).await,
+        Some(controller) => {
+            match tokio::time::timeout(
+                config.limits.request_timeout,
+                controller.execute(origin, call),
+            )
+            .await
+            {
+                Ok(result) => result,
+                Err(_) => Err(ErrorCode::Timeout),
+            }
+        }
         None => execute(&call),
     };
     match result {

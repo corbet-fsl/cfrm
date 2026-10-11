@@ -8,6 +8,9 @@ use tokio::sync::{mpsc, oneshot};
 
 mod accounting;
 mod partial;
+mod recover;
+pub use recover::Recover;
+pub mod valkey;
 
 /// One explicit common epoch for the single-process service incarnation.
 /// This is deployment input, never a member-supplied expiry or key.
@@ -364,7 +367,7 @@ impl<S: Store> Drop for Fence<S> {
 
 impl<S, C, R, Q, F> Service<S, C, R, Q, F>
 where
-    S: Store + Clone + 'static,
+    S: Store + Recover + Clone + 'static,
     C: Clock + 'static,
     R: cswb::Tokens + 'static,
     Q: cthl::Store + Send + Sync + 'static,
@@ -389,6 +392,7 @@ where
             let _fence = Fence(self.storage.clone());
             let mut interval = tokio::time::interval(maintenance);
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            let mut backoff = recover::Backoff::default();
             loop {
                 tokio::select! {
                     command=receiver.recv()=>{
@@ -408,12 +412,17 @@ where
                         }
                     },
                     _=interval.tick()=>{
-                        let result = match (&self.gather, &self.accounting) {
-                            (Some(gather), None) => gather.expire().await,
-                            (None, Some(gather)) => gather.expire().await,
-                            _ => break,
-                        };
-                        if result.is_err(){break;}
+                        // A fenced store is probed again with bounded backoff and a
+                        // failed tick is retried; neither ends the service.
+                        let (gather, accounting) = (&self.gather, &self.accounting);
+                        let tick = backoff.tick(&self.storage, || async {
+                            match (gather, accounting) {
+                                (Some(gather), None) => Some(gather.expire().await.is_ok()),
+                                (None, Some(gather)) => Some(gather.expire().await.is_ok()),
+                                _ => None,
+                            }
+                        }).await;
+                        if tick == recover::Tick::Broken { break; }
                     }
                 }
             }
@@ -423,6 +432,18 @@ where
     }
 }
 impl Handle {
+    /// A controller whose owner never answers, for timeout tests.
+    #[cfg(test)]
+    pub(crate) fn stalled() -> (Self, impl Sized) {
+        let (sender, receiver) = mpsc::channel(1);
+        (
+            Self {
+                sender,
+                request_bytes: 1_048_576,
+            },
+            receiver,
+        )
+    }
     fn submit(&self, command: Command) -> Result<(), ErrorCode> {
         self.sender.try_send(command).map_err(|error| match error {
             mpsc::error::TrySendError::Full(_) => ErrorCode::Capacity,
