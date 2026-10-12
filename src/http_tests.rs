@@ -50,7 +50,7 @@ async fn all_actions_are_registry_derived_and_no_authority_can_be_fabricated() {
     let ts = typescript();
     let spec = openapi();
     let info = actions();
-    assert_eq!(info.len(), 19);
+    assert_eq!(info.len(), 21);
     for action in info {
         assert!(ts.contains(action.name));
         assert!((action.input_schema)().is_object());
