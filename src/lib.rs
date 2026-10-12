@@ -20,9 +20,14 @@ pub mod runtime;
 mod client_http;
 #[cfg(any(
     all(feature = "client-http", not(target_arch = "wasm32")),
-    all(feature = "client-browser", target_arch = "wasm32")
+    all(feature = "client-browser", target_arch = "wasm32"),
+    feature = "client-ohttp"
 ))]
 mod endpoint;
+#[cfg(feature = "client-ohttp")]
+mod client_ohttp;
+#[cfg(feature = "client-ohttp")]
+pub use client_ohttp::OhttpTransport;
 #[cfg(all(feature = "client-http", not(target_arch = "wasm32")))]
 pub use client_http::HttpTransport;
 #[cfg(all(feature = "client-browser", target_arch = "wasm32"))]
