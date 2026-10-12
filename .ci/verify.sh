@@ -3,6 +3,7 @@
 # .github/workflows/ci.yml (resolve selftest, check, dependency-policy
 # first-party, coverage) in CI order, environment, and flags.
 set -euo pipefail
+exec 2>&1
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 export CARGO_TERM_COLOR="${CARGO_TERM_COLOR:-always}"
 export RUNNER_TEMP="${RUNNER_TEMP:-$(mktemp -d)}"
