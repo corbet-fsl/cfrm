@@ -35,13 +35,13 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
     let delay = Delay::new();
     let host = Host::new(&native, delay.executable.clone()).await;
     let request = entry(&host, &native, &g1).await;
-    let Output::Enter(entry) = call(host.address, request).await.unwrap().response else {
+    let Output::Enter(first) = call(host.address, request).await.unwrap().response else {
         panic!("Actual native member entry required")
     };
     let request = signed(
         &g1,
         Request::RoomEpoch(RoomEpochInput {
-            possession: possession(&entry.session, 1),
+            possession: possession(&first.session, 1),
         }),
     );
     let Output::RoomEpoch(common) = call(host.address, request).await.unwrap().response else {
@@ -56,7 +56,7 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
     let request = signed(
         &g1,
         Request::RoomIssue(RoomIssueInput {
-            possession: possession(&entry.session, 2),
+            possession: possession(&first.session, 2),
             operation: vec![9; 16],
             blinded_request: serde_json::to_vec(&prepared.request()).unwrap(),
         }),
@@ -70,7 +70,7 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
     let depart = signed(
         &g1,
         Request::Depart(DepartInput {
-            possession: possession(&entry.session, 3),
+            possession: possession(&first.session, 3),
         }),
     );
     assert!(matches!(
@@ -78,7 +78,7 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
         Output::Depart(_)
     ));
     let command = cmbl::Request {
-        room: room,
+        room,
         operation: [10; 16],
         // An absent room is created only by resuming it; Connect joins a live one.
         action: cmbl::Action::Resume {
@@ -106,7 +106,7 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
     let outcome: cmbl::Outcome = serde_json::from_slice(&connected.result).unwrap();
     assert_eq!(outcome.active_connections, 1);
     let order = cmbl::Request {
-        room: room,
+        room,
         operation: [11; 16],
         action: cmbl::Action::Order {
             expected: outcome.counter,
