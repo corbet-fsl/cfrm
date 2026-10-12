@@ -1,7 +1,7 @@
 //! Oblivious HTTP gateway wiring: keys from secret files, replay cache in Valkey.
 use super::Storage;
-use cfrm::{ErrorCode, http};
-use ohttp_lib::{
+use cfrm::ErrorCode;
+use cblv::{
     gateway::{Gateway, GatewayKey, system_clock},
     replay::{BoxFuture, Id, Insert, ReplayStore, StoreError},
 };
@@ -26,8 +26,9 @@ pub struct Configuration {
     /// The exact forum authority; must be one of `hosts`.
     pub authority: String,
     pub keys: Vec<KeyFile>,
-    /// File holding the secret the relay sends in `x-relay-auth`.
-    pub relay_secret_file: PathBuf,
+    /// Optional file with a secret a front proxy sends in `x-relay-auth`.
+    #[serde(default)]
+    pub relay_secret_file: Option<PathBuf>,
 }
 
 #[derive(Deserialize)]
@@ -78,8 +79,10 @@ pub async fn build(
         replay: Arc::new(replay),
         // Every forum call is cheap to record and most change state.
         mutating: Arc::new(|_| true),
-        anonymous: Arc::new(http::anonymous_path),
-        relay_secret: Some(secret(&settings.relay_secret_file)?),
+        relay_secret: match &settings.relay_secret_file {
+            Some(file) => Some(secret(file)?),
+            None => None,
+        },
         max_inner_response: MAX_RESPONSE,
         clock: system_clock,
     }))

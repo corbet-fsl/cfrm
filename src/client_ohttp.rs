@@ -1,7 +1,7 @@
 //! Forum transport through Oblivious HTTP: the relay sees the sender but only
 //! ciphertext, the gateway sees the call but not the sender.
-use crate::{ErrorCode, Transport, actions, endpoint::Endpoint};
-use ohttp_lib::{Lane, client::Wire, codec};
+use crate::{ErrorCode, Transport, endpoint::Endpoint};
+use cblv::{client::Wire, codec};
 use std::time::Duration;
 
 pub struct OhttpTransport<W> {
@@ -29,15 +29,6 @@ impl<W: Wire> OhttpTransport<W> {
     }
 }
 
-fn lane(path: &str) -> Lane {
-    let anonymous = path.strip_prefix("/v1/").is_some_and(|name| {
-        actions()
-            .iter()
-            .any(|action| action.name == name && action.requirement != crate::Requirement::CurrentDeviceSession)
-    });
-    if anonymous { Lane::Anonymous } else { Lane::Session }
-}
-
 impl<W: Wire> Transport for OhttpTransport<W> {
     async fn post(&self, path: &str, body: Vec<u8>) -> Result<Vec<u8>, ErrorCode> {
         // Validates the action path and the body size exactly as the direct transports do.
@@ -55,7 +46,7 @@ impl<W: Wire> Transport for OhttpTransport<W> {
         };
         let response = self
             .wire
-            .exchange(lane(path), request)
+            .exchange(request)
             .await
             .map_err(|_| ErrorCode::Reconcile)?;
         let header = |name: &[u8]| {

@@ -123,21 +123,12 @@ fn source(request: &Request) -> IpAddr {
 
 #[cfg(feature = "ohttp")]
 fn via_ohttp(request: &Request) -> bool {
-    request.extensions().get::<ohttp_lib::gateway::ViaOhttp>().is_some()
+    request.extensions().get::<cblv::gateway::ViaOhttp>().is_some()
 }
 
 #[cfg(not(feature = "ohttp"))]
 fn via_ohttp(_: &Request) -> bool {
     false
-}
-
-/// Whether `path` is a pre-session action (the OHTTP anonymous lane may carry only these).
-pub fn anonymous_path(path: &str) -> bool {
-    path.strip_prefix("/v1/").is_some_and(|name| {
-        actions()
-            .iter()
-            .any(|action| action.name == name && action.requirement != Requirement::CurrentDeviceSession)
-    })
 }
 
 pub fn router(limits: Limits) -> Result<Router, ErrorCode> {
