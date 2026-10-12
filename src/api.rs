@@ -83,6 +83,7 @@ macro_rules! actions {
             declarations.insert(Output::decl(&cfg));
             declarations.insert(Reply::decl(&cfg));
             declarations.insert(PublicationOutput::decl(&cfg));
+            declarations.insert(ListedRoom::decl(&cfg));
             declarations.insert(Possession::decl(&cfg));
             declarations.insert(Request::decl(&cfg));
             declarations.insert(Call::decl(&cfg));
