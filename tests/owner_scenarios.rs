@@ -466,10 +466,11 @@ async fn real_owner_admission_match_rooms_and_heartbeat() {
     let bob = Fixture::new("bob", 1, now).await;
     let challenge = owners.challenge(&alice).await;
     let (a, a_live) = owners.admit(&alice, &challenge).await.unwrap();
-    assert!(matches!(
-        owners.admit(&alice, &challenge).await,
-        Err(cgth::Error::Presence(cswb::Error::Absent))
-    ));
+    let replay = owners.admit(&alice, &challenge).await.map(|_| ());
+    assert!(
+        matches!(replay, Err(cgth::Error::Presence(cswb::Error::Absent))),
+        "{replay:?}"
+    );
     owners.enter(&bob).await;
     let page = owners.page(&a, &alice, 1).await.unwrap();
     assert_eq!(page.entries.len(), 1);
