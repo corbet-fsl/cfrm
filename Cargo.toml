@@ -36,7 +36,7 @@ governor = { version = "0.10", default-features = false, features = ["std"], opt
 axum = { version = "0.8", optional = true, default-features = false, features = ["http1", "json", "tokio"] }
 tokio = { version = "1", optional = true, features = ["rt", "time", "sync", "net", "macros"] }
 
-cgth = { git = "https://git.corbet.ch/corbet-libs/cgth.git", branch = "v01", features = ["issuer", "accounting"], optional = true }
+cgth = { git = "https://git.corbet.ch/corbet-libs/cgth.git", branch = "listing", features = ["issuer", "accounting"], optional = true }
 csrn = { git = "https://git.corbet.ch/corbet-libs/csrn.git", branch = "v01", optional = true }
 cvtl = { git = "https://git.corbet.ch/corbet-libs/cvtl.git", branch = "v01", optional = true }
 cshm = { git = "https://git.corbet.ch/corbet-foss/cshm", branch = "main", optional = true }

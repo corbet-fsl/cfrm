@@ -81,7 +81,8 @@ where
         | Request::RoomRead(input)
         | Request::RoomOrder(input)
         | Request::RoomRelay(input)
-        | Request::RoomResume(input) => input,
+        | Request::RoomResume(input)
+        | Request::RoomPublish(input) => input,
         // Original MLS history/key handover still requires its member owner.
         _ => return Err(ErrorCode::AuthorityUnavailable),
     };
@@ -95,6 +96,7 @@ where
             | (Request::RoomOrder(_), cmbl::Action::Order { .. })
             | (Request::RoomRelay(_), cmbl::Action::Relay { .. })
             | (Request::RoomResume(_), cmbl::Action::Resume { .. })
+            | (Request::RoomPublish(_), cmbl::Action::Publish { .. })
     ) {
         return Err(ErrorCode::InvalidRequest);
     }
@@ -114,6 +116,7 @@ where
         Request::RoomOrder(_) => Output::RoomOrder(output),
         Request::RoomRelay(_) => Output::RoomRelay(output),
         Request::RoomResume(_) => Output::RoomResume(output),
+        Request::RoomPublish(_) => Output::RoomPublish(output),
         _ => return Err(ErrorCode::InvalidRequest),
     })
 }

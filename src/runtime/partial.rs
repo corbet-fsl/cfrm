@@ -311,7 +311,8 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
             | Request::RoomRead(input)
             | Request::RoomOrder(input)
             | Request::RoomRelay(input)
-            | Request::RoomResume(input) => {
+            | Request::RoomResume(input)
+            | Request::RoomPublish(input) => {
                 if *self.room_quota != Some(room_quota(settings.room_passes_per_epoch)?) {
                     return Err(ErrorCode::AuthorityUnavailable);
                 }
@@ -325,6 +326,7 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
                         | (Request::RoomOrder(_), cmbl::Action::Order { .. })
                         | (Request::RoomRelay(_), cmbl::Action::Relay { .. })
                         | (Request::RoomResume(_), cmbl::Action::Resume { .. })
+                        | (Request::RoomPublish(_), cmbl::Action::Publish { .. })
                 );
                 if !correct_action {
                     return Err(ErrorCode::InvalidRequest);
@@ -355,6 +357,7 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
                     Request::RoomOrder(_) => Output::RoomOrder(output),
                     Request::RoomRelay(_) => Output::RoomRelay(output),
                     Request::RoomResume(_) => Output::RoomResume(output),
+                    Request::RoomPublish(_) => Output::RoomPublish(output),
                     _ => return Err(ErrorCode::InvalidRequest),
                 }
             }

@@ -138,6 +138,33 @@ where
                     gather.depart(read, verification).await.map_err(error)?;
                     Ok(Output::Depart(EmptyOutput {}))
                 }
+                Request::RoomList(input) => {
+                    let cursor: Option<cmmr::Cursor> =
+                        input.cursor.as_deref().map(decode).transpose()?;
+                    let page = gather
+                        .list_rooms(
+                            read,
+                            cursor.as_ref(),
+                            input.page_size.into(),
+                            verification,
+                            contact,
+                        )
+                        .await
+                        .map_err(error)?;
+                    Ok(Output::RoomList(RoomListOutput {
+                        rooms: page
+                            .rooms
+                            .into_iter()
+                            .map(|room| ListedRoom {
+                                room: room.room.to_vec(),
+                                name: room.name,
+                                description: room.description,
+                                here_now: u32::try_from(room.here_now).unwrap_or(u32::MAX),
+                            })
+                            .collect(),
+                        cursor: page.next.as_ref().map(encode).transpose()?,
+                    }))
+                }
                 Request::Search(input) => {
                     let cursor = input.cursor.as_deref().map(decode).transpose()?;
                     let page = gather

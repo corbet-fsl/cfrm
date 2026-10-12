@@ -27,6 +27,7 @@ dto!(RoomEpochInput {
     possession: Possession
 });
 dto!(RoomIssueInput { possession: Possession, operation: Vec<u8>, blinded_request: Vec<u8> });
+dto!(RoomListInput { possession: Possession, cursor: Option<Vec<u8>>, page_size: u16 });
 dto!(RoomEpochOutput { incarnation: String, epoch: Vec<u8> });
 dto!(RoomIssueOutput { signature: Vec<u8> });
 dto!(RoomInput { room_pass: Vec<u8>, command: Vec<u8> });
@@ -98,6 +99,8 @@ dto!(EnterOutput { session: Vec<u8>, revision: Vec<u8>, expires_at_ms: u64 });
 dto!(LiveOutput { revision: Vec<u8>, expires_at_ms: u64 });
 dto!(EmptyOutput {});
 dto!(PublicationOutput { owner: Vec<u8>, revision: u64, publication: Vec<u8> });
+dto!(ListedRoom { room: Vec<u8>, name: String, description: String, here_now: u32 });
+dto!(RoomListOutput { rooms: Vec<ListedRoom>, cursor: Option<Vec<u8>> });
 dto!(SearchOutput { requester_revision: Vec<u8>, entries: Vec<PublicationOutput>, cursor: Option<Vec<u8>>, watch: Vec<u8> });
 dto!(WatchOutput { requester_revision: Vec<u8>, upserts: Vec<PublicationOutput>, removed: Vec<Vec<u8>>, cursor: Option<Vec<u8>>, watch: Vec<u8> });
 dto!(CiphertextOutput { ciphertext: Vec<u8> });
@@ -128,6 +131,7 @@ actions! {
     Ciphertext => "ciphertext" (CiphertextInput => CiphertextOutput) CurrentDeviceSession,
     RoomEpoch => "room_epoch" (RoomEpochInput => RoomEpochOutput) CurrentDeviceSession,
     RoomIssue => "room_issue" (RoomIssueInput => RoomIssueOutput) CurrentDeviceSession,
+    RoomList => "room_list" (RoomListInput => RoomListOutput) CurrentDeviceSession,
     RoomConnect => "room_connect" (RoomInput => RoomOutput) AnonymousRoomPass,
     RoomRenew => "room_renew" (RoomInput => RoomOutput) AnonymousRoomPass,
     RoomDisconnect => "room_disconnect" (RoomInput => RoomOutput) AnonymousRoomPass,
@@ -135,6 +139,7 @@ actions! {
     RoomOrder => "room_order" (RoomInput => RoomOutput) AnonymousRoomPass,
     RoomRelay => "room_relay" (RoomInput => RoomOutput) AnonymousRoomPass,
     RoomResume => "room_resume" (RoomInput => RoomOutput) AnonymousRoomPass,
+    RoomPublish => "room_publish" (RoomInput => RoomOutput) AnonymousRoomPass,
     RoomHandover => "room_handover" (RoomInput => RoomOutput) AnonymousRoomPass,
 }
 
@@ -246,6 +251,7 @@ impl Request {
             Self::Ciphertext(v) => Some(&v.possession),
             Self::RoomEpoch(v) => Some(&v.possession),
             Self::RoomIssue(v) => Some(&v.possession),
+            Self::RoomList(v) => Some(&v.possession),
             _ => None,
         }
     }
@@ -259,6 +265,7 @@ impl Request {
             Self::Ciphertext(v) => Some(&mut v.possession),
             Self::RoomEpoch(v) => Some(&mut v.possession),
             Self::RoomIssue(v) => Some(&mut v.possession),
+            Self::RoomList(v) => Some(&mut v.possession),
             _ => None,
         }
     }

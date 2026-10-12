@@ -809,7 +809,7 @@ dependencies = [
 [[package]]
 name = "cgth"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-libs/cgth.git?branch=v01#e3f5f8df18d98761e972aa21e10d60c418a8b145"
+source = "git+https://git.corbet.ch/corbet-libs/cgth.git?branch=listing#2e2b1fa25bae581b5de8d324be57a6a1fc9d6525"
 dependencies = [
  "cbcn",
  "cblc",
@@ -1024,7 +1024,7 @@ dependencies = [
 [[package]]
 name = "cmbl"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01#98a33ea9b95f96e872f577820a6047be902a1a44"
+source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=listing#d4f2ec71790337b5481103cd91fe8a3cb0de8ea8"
 dependencies = [
  "blake3",
  "blind-rsa-signatures",

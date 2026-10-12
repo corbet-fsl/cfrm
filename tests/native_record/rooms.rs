@@ -49,7 +49,10 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
     };
     let epoch: cmbl::passes::Epoch = serde_json::from_slice(&common.epoch).unwrap();
     assert_eq!(epoch.valid_until, (native.now + 3) * 1000);
-    let prepared = cmbl::passes::PreparedPass::new(&epoch, [8; 16], native.now * 1000).unwrap();
+    // The opaque room id is derived from the room's own listing key.
+    let listing_key = ed25519_dalek::SigningKey::from_bytes(&[41; 32]);
+    let room = cmbl::listing::room_id(&listing_key.verifying_key().to_bytes());
+    let prepared = cmbl::passes::PreparedPass::new(&epoch, room, native.now * 1000).unwrap();
     let request = signed(
         &g1,
         Request::RoomIssue(RoomIssueInput {
@@ -75,7 +78,7 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
         Output::Depart(_)
     ));
     let command = cmbl::Request {
-        room: [8; 16],
+        room: room,
         operation: [10; 16],
         // An absent room is created only by resuming it; Connect joins a live one.
         action: cmbl::Action::Resume {
@@ -103,7 +106,7 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
     let outcome: cmbl::Outcome = serde_json::from_slice(&connected.result).unwrap();
     assert_eq!(outcome.active_connections, 1);
     let order = cmbl::Request {
-        room: [8; 16],
+        room: room,
         operation: [11; 16],
         action: cmbl::Action::Order {
             expected: outcome.counter,
@@ -129,6 +132,88 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
         call(host.address, Request::RoomHandover(input.clone())).await,
         Err(ErrorCode::AuthorityUnavailable)
     );
+    // Listing: any pass holder submits the entry the room key signed; members
+    // read it with the here-now count and never traffic volume.
+    let listed_entry = |counter, withdrawn| {
+        cmbl::listing::SignedEntry::sign(
+            cmbl::listing::Entry {
+                key: listing_key.verifying_key().to_bytes(),
+                name: "Chess".into(),
+                description: "Friendly games".into(),
+                counter,
+                expires_ms: (native.now + 3) * 1000,
+                withdrawn,
+            },
+            &listing_key,
+        )
+        .unwrap()
+    };
+    let publish = |operation: u8, entry| {
+        let command = cmbl::Request {
+            room,
+            operation: [operation; 16],
+            action: cmbl::Action::Publish { entry },
+        };
+        RoomInput {
+            room_pass: pass
+                .prove(&command, &common.incarnation, native.now * 1000)
+                .unwrap(),
+            command: serde_json::to_vec(&command).unwrap(),
+        }
+    };
+    assert_eq!(
+        call(
+            host.address,
+            Request::RoomConnect(publish(14, listed_entry(1, false)))
+        )
+        .await,
+        Err(ErrorCode::InvalidRequest)
+    );
+    let Output::RoomPublish(_) = call(
+        host.address,
+        Request::RoomPublish(publish(12, listed_entry(1, false))),
+    )
+    .await
+    .unwrap()
+    .response
+    else {
+        panic!("Actual signed listing required")
+    };
+    let request = entry(&host, &native, &g1).await;
+    let Output::Enter(second) = call(host.address, request).await.unwrap().response else {
+        panic!("Actual second native member entry required")
+    };
+    let list = |nonce| {
+        signed(
+            &g1,
+            Request::RoomList(RoomListInput {
+                possession: possession(&second.session, nonce),
+                cursor: None,
+                page_size: 10,
+            }),
+        )
+    };
+    let Output::RoomList(listing) = call(host.address, list(1)).await.unwrap().response else {
+        panic!("Actual room listing required")
+    };
+    assert_eq!(listing.rooms.len(), 1);
+    assert_eq!(listing.rooms[0].room, room.to_vec());
+    assert_eq!(listing.rooms[0].name, "Chess");
+    assert_eq!(listing.rooms[0].here_now, 1);
+    let Output::RoomPublish(_) = call(
+        host.address,
+        Request::RoomPublish(publish(13, listed_entry(2, true))),
+    )
+    .await
+    .unwrap()
+    .response
+    else {
+        panic!("Actual signed tombstone required")
+    };
+    let Output::RoomList(listing) = call(host.address, list(2)).await.unwrap().response else {
+        panic!("Actual room listing required")
+    };
+    assert!(listing.rooms.is_empty());
     host.clock.0.store(epoch.valid_until, Ordering::SeqCst);
     assert_eq!(
         call(host.address, Request::RoomResume(input)).await,

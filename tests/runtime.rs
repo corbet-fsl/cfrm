@@ -475,9 +475,14 @@ async fn missing_accounting_currentness_refuses_every_member_action_without_atte
             possession: proof.clone(),
         }),
         Request::RoomIssue(RoomIssueInput {
-            possession: proof,
+            possession: proof.clone(),
             operation: vec![],
             blinded_request: vec![],
+        }),
+        Request::RoomList(RoomListInput {
+            possession: proof,
+            cursor: None,
+            page_size: 10,
         }),
         Request::RoomConnect(room.clone()),
         Request::RoomRenew(room.clone()),
@@ -486,6 +491,7 @@ async fn missing_accounting_currentness_refuses_every_member_action_without_atte
         Request::RoomOrder(room.clone()),
         Request::RoomRelay(room.clone()),
         Request::RoomResume(room.clone()),
+        Request::RoomPublish(room.clone()),
         Request::RoomHandover(room),
     ];
     assert_eq!(

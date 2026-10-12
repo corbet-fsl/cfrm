@@ -56,9 +56,14 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
             possession: possession.clone(),
         }),
         Request::RoomIssue(RoomIssueInput {
-            possession,
+            possession: possession.clone(),
             operation: vec![6],
             blinded_request: vec![7],
+        }),
+        Request::RoomList(RoomListInput {
+            possession,
+            cursor: None,
+            page_size: 10,
         }),
         Request::RoomConnect(room.clone()),
         Request::RoomRenew(room.clone()),
@@ -67,6 +72,7 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
         Request::RoomOrder(room.clone()),
         Request::RoomRelay(room.clone()),
         Request::RoomResume(room.clone()),
+        Request::RoomPublish(room.clone()),
         Request::RoomHandover(room),
     ];
     let names = actions().into_iter().map(|a| a.name).collect::<Vec<_>>();
@@ -77,7 +83,7 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
     for request in requests {
         let name = request.info().name;
         assert!((request.info().input_schema)().is_object());
-        if matches!(name, "room_epoch" | "room_issue") {
+        if matches!(name, "room_epoch" | "room_issue" | "room_list") {
             assert_eq!(
                 request.info().requirement,
                 Requirement::CurrentDeviceSession
