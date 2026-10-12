@@ -26,7 +26,7 @@ pub struct Configuration {
     /// The exact forum authority; must be one of `hosts`.
     pub authority: String,
     pub keys: Vec<KeyFile>,
-    /// Optional file with a secret a front proxy sends in `x-relay-auth`.
+    /// File with the secret the Cloudflare proxy adds as `x-relay-auth`; absent only in tests.
     #[serde(default)]
     pub relay_secret_file: Option<PathBuf>,
 }
