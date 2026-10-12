@@ -27,9 +27,9 @@ fixture_cache_root=${CI_CACHE_ROOT:-${CARGO_HOME:-}}
 fixture_snapshot=$(mktemp -d "$RUNNER_TEMP/cfrm-record-fixture.XXXXXXXX")
 export CBLC_BB
 CBLC_BB=$(python3 .ci/check-record-fixture.py \
-  --directory "$fixture_cache_root/ccid-cached/08a9478e457e604aa31f9a54/release-artifacts/gather-record-fixture" \
-  --source 14688fa1bde3dfaab7c3d8b88adbf460800671df \
-  --metadata-sha256 57e7fe20d85f72037cc6c01a997bf5482f6d579695935fed79e9141f9dc655e0 \
+  --directory "$fixture_cache_root/ccid-cached/08a9478e457e604aa31f9a54/release-artifacts/gather-record-fixture-retained/883ad23d9d8787d68b74201fa93510e330d4f6a625a15572b3d4a6ec1870570e" \
+  --source 3c26cad15ae4bd133930b72a7ff16d2057806c6a \
+  --metadata-sha256 883ad23d9d8787d68b74201fa93510e330d4f6a625a15572b3d4a6ec1870570e \
   --output "$fixture_snapshot/capture")
 export CBLC_RECORD_EPOCH_FIXTURE="$fixture_snapshot/capture/gather-record-fixture.json"
 
