@@ -122,6 +122,25 @@ fn source(request: &Request) -> IpAddr {
     }
 }
 
+#[cfg(feature = "ohttp")]
+fn via_ohttp(request: &Request) -> bool {
+    request.extensions().get::<ohttp_lib::gateway::ViaOhttp>().is_some()
+}
+
+#[cfg(not(feature = "ohttp"))]
+fn via_ohttp(_: &Request) -> bool {
+    false
+}
+
+/// Whether `path` is a pre-session action (the OHTTP anonymous lane may carry only these).
+pub fn anonymous_path(path: &str) -> bool {
+    path.strip_prefix("/v1/").is_some_and(|name| {
+        actions()
+            .iter()
+            .any(|action| action.name == name && action.requirement != Requirement::CurrentDeviceSession)
+    })
+}
+
 pub fn router(limits: Limits) -> Result<Router, ErrorCode> {
     configured(limits, None)
 }
@@ -277,7 +296,8 @@ async fn handle_allowed(config: Arc<Config>, request: Request) -> Response {
     }
     // Cheapest refusal first: the per-source bucket runs before a permit, the
     // body read or any owner work.
-    if !config.source.admit(&source(&request)) {
+    // Behind OHTTP the sender's address is never known here; the relay holds the per-IP limits.
+    if !via_ohttp(&request) && !config.source.admit(&source(&request)) {
         return reject(ErrorCode::Capacity);
     }
     let path = request.uri().path().to_owned();

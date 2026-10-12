@@ -16,6 +16,8 @@ use std::{
 };
 
 mod accounting;
+#[cfg(feature = "ohttp")]
+mod ohttp;
 
 #[derive(clap::Parser)]
 pub struct Arguments {
@@ -55,6 +57,10 @@ struct Configuration {
     maximum_staleness_seconds: u64,
     maximum_snapshot_age: u64,
     storage: Storage,
+    /// Oblivious HTTP gateway; absent means direct HTTPS only.
+    #[cfg(feature = "ohttp")]
+    #[serde(default)]
+    ohttp: Option<ohttp::Configuration>,
     storage_limits: cmmr::Limits,
     maximum_lease_ms: u64,
     publication_bytes: usize,
@@ -198,16 +204,37 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
     if !storage.warnings().is_empty() {
         eprintln!("forum volatile storage persistence could not be verified");
     }
+    #[cfg(feature = "ohttp")]
+    let gateway = match &configuration.ohttp {
+        Some(settings) => Some(ohttp::build(settings, &configuration.hosts, &configuration.storage).await?),
+        None => None,
+    };
     match &storage {
         cvtl::Volatile::Memory(_) => {
             let throttle = cthl::MemoryStore::new(configuration.throttle_capacity);
-            serve(configuration, storage, clock, throttle).await
+            serve(
+                configuration,
+                storage,
+                clock,
+                throttle,
+                #[cfg(feature = "ohttp")]
+                gateway,
+            )
+            .await
         }
         cvtl::Volatile::Valkey(backend) => {
             let throttle =
                 cvtl::ThrottleStore::new(backend.clone(), configuration.throttle_capacity)
                     .map_err(|_| ErrorCode::InvalidRequest)?;
-            serve(configuration, storage, clock, throttle).await
+            serve(
+                configuration,
+                storage,
+                clock,
+                throttle,
+                #[cfg(feature = "ohttp")]
+                gateway,
+            )
+            .await
         }
     }
 }
@@ -217,6 +244,7 @@ async fn serve<Q: cthl::Store + 'static>(
     storage: cvtl::Volatile<WallClock>,
     clock: WallClock,
     quota: Q,
+    #[cfg(feature = "ohttp")] gateway: Option<Arc<ohttp_lib::gateway::Gateway>>,
 ) -> Result<(), ErrorCode> {
     let trust = csrn::cchr::Configuration {
         origin: configuration.trust_origin,
@@ -320,6 +348,11 @@ async fn serve<Q: cthl::Store + 'static>(
         },
         handle.clone(),
     )?;
+    #[cfg(feature = "ohttp")]
+    let app = match gateway {
+        Some(gateway) => ohttp_lib::gateway::mount(app, gateway),
+        None => app,
+    };
     let listener = tokio::net::TcpListener::bind(configuration.bind)
         .await
         .map_err(|_| ErrorCode::Transport)?;
