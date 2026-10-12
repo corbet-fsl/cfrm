@@ -41,7 +41,7 @@ impl Fixture {
         let mut fixture: Self = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         fixture.directory = path.parent().unwrap().to_owned();
         assert_eq!(
-            data_encoding::HEXLOWER.encode(&fixture.trusted_owner),
+            data_encoding::BASE64URL_NOPAD.encode(&fixture.trusted_owner),
             cblc::admission::member_id(&[7; 48])
         );
         assert_eq!(fixture.record.owner, fixture.trusted_owner);
