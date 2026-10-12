@@ -23,9 +23,10 @@ use tokio::sync::Semaphore;
 /// How often idle source and session keys are dropped from RAM.
 const PRUNE_INTERVAL: Duration = Duration::from_secs(30);
 
-/// Longest session identifier a bucket will track; longer values are refused
+/// Longest encoded session a bucket will track (a real session is a few hundred
+/// bytes of member, generation and device key); longer values are refused
 /// before any owner work.
-const SESSION_BYTES: usize = 64;
+const SESSION_BYTES: usize = 1024;
 
 pub struct Limits {
     pub hosts: Vec<String>,
