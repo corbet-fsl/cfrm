@@ -238,10 +238,10 @@ impl Delay {
     pub async fn started(&self) -> u32 {
         tokio::time::timeout(Duration::from_secs(10), async {
             loop {
-                if let Ok(bytes) = std::fs::read_to_string(&self.pid) {
-                    if let Ok(pid) = bytes.parse() {
-                        break pid;
-                    }
+                if let Ok(bytes) = std::fs::read_to_string(&self.pid)
+                    && let Ok(pid) = bytes.parse()
+                {
+                    break pid;
                 }
                 tokio::time::sleep(Duration::from_millis(10)).await;
             }
