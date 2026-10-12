@@ -809,7 +809,7 @@ dependencies = [
 [[package]]
 name = "cgth"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-libs/cgth.git?branch=listing#b782162217b5edd7ddbe6d0488d5dd9e485338c5"
+source = "git+https://git.corbet.ch/corbet-libs/cgth.git?branch=v01#b782162217b5edd7ddbe6d0488d5dd9e485338c5"
 dependencies = [
  "cbcn",
  "cblc",
