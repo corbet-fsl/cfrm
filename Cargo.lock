@@ -648,10 +648,10 @@ dependencies = [
 [[package]]
 name = "cblc"
 version = "0.0.0"
-source = "git+https://git.corbet.ch/corbet-libs/cblc?branch=main#1589a3a40557f74e0d1bc8bd0e594cd64845c840"
+source = "git+https://git.corbet.ch/corbet-libs/cblc?branch=main#23e8c76bff4a61f964a0984d73e48f29d4ad8139"
 dependencies = [
  "cbcn",
- "cmbl 0.1.0 (git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01)",
+ "cmbl",
  "cpns",
  "csgn",
  "cssr",
@@ -809,13 +809,13 @@ dependencies = [
 [[package]]
 name = "cgth"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-libs/cgth.git?branch=listing#2e2b1fa25bae581b5de8d324be57a6a1fc9d6525"
+source = "git+https://git.corbet.ch/corbet-libs/cgth.git?branch=listing#b782162217b5edd7ddbe6d0488d5dd9e485338c5"
 dependencies = [
  "cbcn",
  "cblc",
  "cchr",
  "clkp",
- "cmbl 0.1.0 (git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=listing)",
+ "cmbl",
  "cmmr",
  "crbk",
  "cshm",
@@ -1024,27 +1024,7 @@ dependencies = [
 [[package]]
 name = "cmbl"
 version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=listing#d4f2ec71790337b5481103cd91fe8a3cb0de8ea8"
-dependencies = [
- "blake3",
- "blind-rsa-signatures",
- "cmmr",
- "data-encoding",
- "ed25519-dalek 3.0.0",
- "getrandom 0.4.3",
- "openssl",
- "postcard",
- "schemars",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
- "zeroize",
-]
-
-[[package]]
-name = "cmbl"
-version = "0.1.0"
-source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01#98a33ea9b95f96e872f577820a6047be902a1a44"
+source = "git+https://git.corbet.ch/corbet-foss/cmbl.git?branch=v01#1f35359af7c4874a8773ebc756579088f86131e1"
 dependencies = [
  "blake3",
  "blind-rsa-signatures",
