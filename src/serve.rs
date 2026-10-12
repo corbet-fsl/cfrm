@@ -244,7 +244,7 @@ async fn serve<Q: cthl::Store + 'static>(
     storage: cvtl::Volatile<WallClock>,
     clock: WallClock,
     quota: Q,
-    #[cfg(feature = "ohttp")] gateway: Option<Arc<ohttp_lib::gateway::Gateway>>,
+    #[cfg(feature = "ohttp")] gateway: Option<Arc<cblv::gateway::Gateway>>,
 ) -> Result<(), ErrorCode> {
     let trust = csrn::cchr::Configuration {
         origin: configuration.trust_origin,
@@ -350,7 +350,7 @@ async fn serve<Q: cthl::Store + 'static>(
     )?;
     #[cfg(feature = "ohttp")]
     let app = match gateway {
-        Some(gateway) => ohttp_lib::gateway::mount(app, gateway),
+        Some(gateway) => cblv::gateway::mount(app, gateway),
         None => app,
     };
     let listener = tokio::net::TcpListener::bind(configuration.bind)
