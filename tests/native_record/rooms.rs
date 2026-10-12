@@ -189,7 +189,7 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
             Request::RoomList(RoomListInput {
                 possession: possession(&second.session, nonce),
                 cursor: None,
-                page_size: 10,
+                page_size: 4,
             }),
         )
     };
