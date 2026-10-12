@@ -15,6 +15,7 @@ impl Clock for Time {
         Ok(self.0.load(Ordering::SeqCst))
     }
 }
+#[derive(Clone)]
 struct Random;
 impl cswb::Tokens for Random {
     fn next(&self) -> Result<[u8; 16], cswb::Error> {
