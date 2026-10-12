@@ -8,4 +8,7 @@ cargo metadata --locked --all-features --format-version 1 > dependency-metadata.
 cp Cargo.lock "$ARTIFACT_ROOT/resolve-dependencies-Cargo.lock"
 cp dependency-metadata.json "$ARTIFACT_ROOT/resolve-dependencies-metadata.json"
 sha256sum Cargo.lock dependency-metadata.json
+echo 'LOCK-BEGIN'
+cat Cargo.lock
+echo 'LOCK-END'
 echo 'Resolved dependency graph only; retain the lock in a commit and run verify.'
