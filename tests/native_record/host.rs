@@ -166,8 +166,16 @@ impl Host {
                 anonymous_concurrent: 2,
                 body_timeout: Duration::from_secs(30),
                 request_timeout: Duration::from_secs(120),
-                source: cfrm::bucket::Bucket { burst: 100_000, replenish: Duration::from_millis(1), keys: 16 },
-                session: cfrm::bucket::Bucket { burst: 100_000, replenish: Duration::from_millis(1), keys: 1024 },
+                source: cfrm::bucket::Bucket {
+                    burst: 100_000,
+                    replenish: Duration::from_millis(1),
+                    keys: 16,
+                },
+                session: cfrm::bucket::Bucket {
+                    burst: 100_000,
+                    replenish: Duration::from_millis(1),
+                    keys: 1024,
+                },
             },
             handle.clone(),
         )
