@@ -77,7 +77,8 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
     let command = cmbl::Request {
         room: [8; 16],
         operation: [10; 16],
-        action: cmbl::Action::Connect {
+        // An absent room is created only by resuming it; Connect joins a live one.
+        action: cmbl::Action::Resume {
             connection: pass.connection(),
         },
     };
@@ -92,7 +93,7 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
         call(host.address, Request::RoomOrder(input.clone())).await,
         Err(ErrorCode::InvalidRequest)
     );
-    let Output::RoomConnect(connected) = call(host.address, Request::RoomConnect(input.clone()))
+    let Output::RoomResume(connected) = call(host.address, Request::RoomResume(input.clone()))
         .await
         .unwrap()
         .response
@@ -130,7 +131,7 @@ async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_
     );
     host.clock.0.store(epoch.valid_until, Ordering::SeqCst);
     assert_eq!(
-        call(host.address, Request::RoomConnect(input)).await,
+        call(host.address, Request::RoomResume(input)).await,
         Err(ErrorCode::AuthorityUnavailable)
     );
 }
