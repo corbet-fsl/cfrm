@@ -219,7 +219,15 @@ impl Delay {
         .canonicalize()
         .unwrap();
         let quoted = |path: &Path| serde_json::to_string(path.to_str().unwrap()).unwrap();
-        std::fs::write(&executable, format!("#!/usr/bin/env python3\nimport os,sys,time\nopen({},'w').write(str(os.getpid()))\ntime.sleep(float(open({}).read()))\nreal={}\nos.execv(real,[real,*sys.argv[1:]])\n", quoted(&pid), quoted(&control), quoted(&real))).unwrap();
+        // The verifier starts its worker with an empty environment, so the
+        // interpreter must be an absolute path rather than an env lookup.
+        let python = std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
+            .map(|directory| directory.join("python3"))
+            .find(|candidate| candidate.is_file())
+            .expect("A python3 interpreter is required for the scheduling delay wrapper")
+            .canonicalize()
+            .unwrap();
+        std::fs::write(&executable, format!("#!{}\nimport os,sys,time\nopen({},'w').write(str(os.getpid()))\ntime.sleep(float(open({}).read()))\nreal={}\nos.execv(real,[real,*sys.argv[1:]])\n", python.display(), quoted(&pid), quoted(&control), quoted(&real))).unwrap();
         std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o755)).unwrap();
         std::fs::write(&control, "0").unwrap();
         Self {
