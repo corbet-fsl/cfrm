@@ -25,7 +25,11 @@ impl<W: Wire> OhttpTransport<W> {
             Some(port) => format!("{host}:{port}"),
             None => host.to_owned(),
         };
-        Ok(Self { wire, endpoint, authority })
+        Ok(Self {
+            wire,
+            endpoint,
+            authority,
+        })
     }
 }
 
@@ -38,7 +42,10 @@ impl<W: Wire> Transport for OhttpTransport<W> {
             authority: self.authority.clone().into_bytes(),
             path: path.as_bytes().to_vec(),
             headers: vec![
-                (b"origin".to_vec(), self.endpoint.member.clone().into_bytes()),
+                (
+                    b"origin".to_vec(),
+                    self.endpoint.member.clone().into_bytes(),
+                ),
                 (b"content-type".to_vec(), b"application/json".to_vec()),
                 (b"cache-control".to_vec(), b"no-store".to_vec()),
             ],

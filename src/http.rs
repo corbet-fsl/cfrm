@@ -124,7 +124,10 @@ fn source(request: &Request) -> IpAddr {
 
 #[cfg(feature = "ohttp")]
 fn via_ohttp(request: &Request) -> bool {
-    request.extensions().get::<cblv::gateway::ViaOhttp>().is_some()
+    request
+        .extensions()
+        .get::<cblv::gateway::ViaOhttp>()
+        .is_some()
 }
 
 #[cfg(not(feature = "ohttp"))]
