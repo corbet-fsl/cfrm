@@ -1,6 +1,6 @@
-use cfrm::{ErrorCode, http, runtime};
+use cfrm::{ErrorCode, http, runtime, tenant};
 use cgth::{clkp, cmbl, cmmr, cswb, cthl};
-use cmmr::{Clock, Store};
+use cmmr::Clock;
 use serde::Deserialize;
 use std::{
     collections::BTreeMap,
@@ -18,6 +18,7 @@ use std::{
 mod accounting;
 #[cfg(feature = "ohttp")]
 mod ohttp;
+mod registry;
 
 #[derive(clap::Parser)]
 pub struct Arguments {
@@ -37,16 +38,11 @@ enum Command {
 #[serde(deny_unknown_fields)]
 struct Configuration {
     bind: SocketAddr,
-    community: String,
     admission_action: String,
     accounting: accounting::Configuration,
     incarnation: String,
-    hosts: Vec<String>,
-    origins: Vec<String>,
-    trust_origin: String,
-    trust_key_ring: Vec<u8>,
-    trust_minimum_revision: u64,
-    trust_ring_revision: u64,
+    /// Where communities come from. Nothing per-community is configured.
+    registry: registry::Configuration,
     /// Explicit public DER roots supplement the maintained TLS root store.
     trust_roots_der: Vec<Vec<u8>>,
     refresh_seconds: u64,
@@ -152,6 +148,15 @@ fn entropy() -> Result<u64, ErrorCode> {
     Ok(u64::from_le_bytes(value))
 }
 
+/// Process-wide inputs shared by every community this process serves.
+struct Shared {
+    configuration: Configuration,
+    clock: WallClock,
+    /// Present for Valkey storage; every community opens its own scope on it.
+    network: Option<(Arc<cvtl::RedisNetwork>, redis::aio::MultiplexedConnection)>,
+    artifacts: cgth::accounting::artifacts::ExtensionArtifacts,
+}
+
 pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
     let Command::Serve { config } = arguments.command;
     let file = std::fs::File::open(config).map_err(|_| ErrorCode::InvalidRequest)?;
@@ -166,17 +171,13 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
         serde_json::from_slice(&bytes).map_err(|_| ErrorCode::InvalidRequest)?;
     if configuration.maximum_lease_ms > configuration.storage_limits.ttl_ms
         || configuration.shutdown_ms == 0
+        || configuration.registry.sweep_seconds == 0
     {
         return Err(ErrorCode::InvalidRequest);
     }
     let clock = WallClock::default();
-    let scope = cmmr::Scope::new(&configuration.community, &configuration.incarnation)
-        .map_err(|_| ErrorCode::InvalidRequest)?;
-    let storage: cvtl::Volatile<_> = match &configuration.storage {
-        Storage::Memory => {
-            cvtl::Volatile::memory(scope, configuration.storage_limits, clock.clone())
-                .map_err(|_| ErrorCode::AuthorityUnavailable)?
-        }
+    let network = match &configuration.storage {
+        Storage::Memory => None,
         Storage::Valkey { url, timeout_ms } => {
             let timeout = Duration::from_millis(*timeout_ms);
             if timeout.is_zero() || timeout > Duration::from_secs(60) {
@@ -191,216 +192,284 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
                     .map_err(|_| ErrorCode::AuthorityUnavailable)?
                     .map_err(|_| ErrorCode::AuthorityUnavailable)?;
             let network = Arc::new(
-                cvtl::RedisNetwork::new(connection, timeout)
+                cvtl::RedisNetwork::new(connection.clone(), timeout)
                     .map_err(|_| ErrorCode::InvalidRequest)?,
             );
-            cvtl::Volatile::valkey(network, scope, configuration.storage_limits, clock.clone())
-                .await
-                .map_err(|_| ErrorCode::AuthorityUnavailable)?
+            Some((network, connection))
         }
     };
-    // Persistent state is refused; an unreadable setting is only reported.
-    runtime::valkey::check_persistence(storage.warnings())?;
-    if !storage.warnings().is_empty() {
-        eprintln!("forum volatile storage persistence could not be verified");
-    }
     #[cfg(feature = "ohttp")]
     let gateway = match &configuration.ohttp {
-        Some(settings) => {
-            Some(ohttp::build(settings, &configuration.hosts, &configuration.storage).await?)
-        }
+        Some(settings) => Some(ohttp::build(settings, &configuration.storage).await?),
         None => None,
     };
-    match &storage {
-        cvtl::Volatile::Memory(_) => {
-            let throttle = cthl::MemoryStore::new(configuration.throttle_capacity);
-            serve(
-                configuration,
-                storage,
-                clock,
-                throttle,
-                #[cfg(feature = "ohttp")]
-                gateway,
-            )
-            .await
-        }
-        cvtl::Volatile::Valkey(backend) => {
-            let throttle =
-                cvtl::ThrottleStore::new(backend.clone(), configuration.throttle_capacity)
-                    .map_err(|_| ErrorCode::InvalidRequest)?;
-            serve(
-                configuration,
-                storage,
-                clock,
-                throttle,
-                #[cfg(feature = "ohttp")]
-                gateway,
-            )
-            .await
-        }
-    }
-}
-
-async fn serve<Q: cthl::Store + 'static>(
-    configuration: Configuration,
-    storage: cvtl::Volatile<WallClock>,
-    clock: WallClock,
-    quota: Q,
-    #[cfg(feature = "ohttp")] gateway: Option<Arc<cblv::gateway::Gateway>>,
-) -> Result<(), ErrorCode> {
-    let trust = csrn::cchr::Configuration {
-        origin: configuration.trust_origin,
-        community: configuration.community.clone(),
-        key_ring: configuration.trust_key_ring,
-        minimum_revision: configuration.trust_minimum_revision,
-        ring_revision: configuration.trust_ring_revision,
+    let limits = http::Limits {
+        hosts: Vec::new(),
+        origins: Vec::new(),
+        body_bytes: configuration.request_bytes,
+        concurrent: configuration.http_concurrent,
+        anonymous_concurrent: configuration.http_anonymous_concurrent,
+        body_timeout: Duration::from_millis(configuration.http_body_timeout_ms),
+        request_timeout: Duration::from_millis(configuration.http_request_timeout_ms),
+        source: configuration.source_bucket.bucket(),
+        session: configuration.session_bucket.bucket(),
     };
-    let transport = csrn::http::Http::with_roots(&trust, &configuration.trust_roots_der)
-        .map_err(|_| ErrorCode::InvalidRequest)?;
-    let assurance = csrn::Assurance::new(
-        trust,
-        csrn::feed::Config {
-            retry_entropy: entropy()?,
-            refresh_seconds: configuration.refresh_seconds,
-            poll_seconds: configuration.poll_seconds,
-            request_seconds: configuration.request_seconds,
-            initial_backoff_seconds: configuration.initial_backoff_seconds,
-            maximum_backoff_seconds: configuration.maximum_backoff_seconds,
-            maximum_staleness_seconds: configuration.maximum_staleness_seconds,
-        },
-    )
-    .map_err(|_| ErrorCode::InvalidRequest)?;
-    let mut rates = BTreeMap::new();
-    for action in cfrm::actions() {
-        let value = configuration
-            .throttle
-            .get(action.name)
-            .ok_or(ErrorCode::InvalidRequest)?;
-        let limit = cthl::Limit::new(value.burst, Duration::from_millis(value.replenish_ms))
-            .map_err(|_| ErrorCode::InvalidRequest)?;
-        rates.insert(action.name, limit);
-    }
-    if rates.len() != configuration.throttle.len() {
-        return Err(ErrorCode::InvalidRequest);
-    }
-    let throttle = cthl::Throttle::new(&configuration.community, rates, quota)
-        .map_err(|_| ErrorCode::InvalidRequest)?;
-    let native = configuration.accounting.verifier()?;
-    let cancellation = native.cancellation();
-    let record_limits = configuration.accounting.limits();
-    let record_configuration = cgth::accounting::Configuration {
-        community: configuration.community.clone(),
-        period_key: configuration.accounting.period_key,
-        period_seconds: configuration.accounting.period_seconds,
-    };
-    let service = runtime::Service::new(
-        assurance,
-        runtime::Parts {
-            storage: storage.clone(),
-            clock: clock.clone(),
-            tokens: Random,
-            throttle,
-        },
-        runtime::Configuration {
-            community: configuration.community,
-            incarnation: configuration.incarnation,
-            admission_action: configuration.admission_action,
-            origins: configuration.origins.clone(),
-            maximum_snapshot_age: configuration.maximum_snapshot_age,
-            request_bytes: configuration.request_bytes,
-            presence: cswb::Limits {
-                lease_ms: configuration.maximum_lease_ms,
-                publication_bytes: configuration.publication_bytes,
-                ciphertext_bytes: configuration.ciphertext_bytes,
-            },
-            lookup: clkp::LookupLimits {
-                candidates: configuration.candidate_count,
-                publication_bytes: configuration.page_publication_bytes,
-            },
-            room_epoch: configuration.room_epoch,
-            rooms: cmbl::Limits {
-                connections: configuration.room_connections,
-                relay_messages: configuration.room_relay_messages,
-                message_bytes: configuration.room_message_bytes,
-                lifetime_ms: configuration.room_lifetime_ms,
-                proof_bytes: configuration.room_proof_bytes,
-                operation_receipts: configuration.room_operation_receipts,
-            },
-        },
-        |_: &str| cshm::ContactCheck::Unavailable,
-    )?;
-    let service = service.with_accounting(record_configuration, native, record_limits)?;
-    // No accepting detector is substituted: restricted public text stays refused
-    // until an original contact detector can be supplied by the service owner.
-    let (handle, mut worker) = service.spawn(
-        configuration.command_capacity,
-        Duration::from_millis(configuration.maintenance_ms),
-    )?;
-    let app = http::router_with(
-        http::Limits {
-            hosts: configuration.hosts,
-            origins: configuration.origins,
-            body_bytes: configuration.request_bytes,
-            concurrent: configuration.http_concurrent,
-            anonymous_concurrent: configuration.http_anonymous_concurrent,
-            body_timeout: Duration::from_millis(configuration.http_body_timeout_ms),
-            request_timeout: Duration::from_millis(configuration.http_request_timeout_ms),
-            source: configuration.source_bucket.bucket(),
-            session: configuration.session_bucket.bucket(),
-        },
-        handle.clone(),
-    )?;
+    let bind = configuration.bind;
+    let shutdown = Duration::from_millis(configuration.shutdown_ms);
+    let sweep = Duration::from_secs(configuration.registry.sweep_seconds);
+    let recheck = Duration::from_secs(configuration.registry.recheck_seconds);
+    let maximum = configuration.registry.maximum_communities;
+    let directory = Arc::new(registry::Http::new(&configuration.registry)?);
+    let tenants = Arc::new(tenant::Tenants::new(
+        directory,
+        Arc::new(Platform(Arc::new(Shared {
+            artifacts: configuration.accounting.artifacts()?,
+            network,
+            clock,
+            configuration,
+        }))),
+        recheck,
+        shutdown,
+        maximum,
+    )?);
+    let app = http::router_tenants(limits, tenants.clone())?;
     #[cfg(feature = "ohttp")]
     let app = match gateway {
         Some(gateway) => cblv::gateway::mount(app, gateway),
         None => app,
     };
-    let listener = tokio::net::TcpListener::bind(configuration.bind)
+    let listener = tokio::net::TcpListener::bind(bind)
         .await
         .map_err(|_| ErrorCode::Transport)?;
-    let (outcome, finished) = {
-        let feed = follow(handle.clone(), transport, clock);
-        let server = axum::serve(
-            listener,
-            app.into_make_service_with_connect_info::<SocketAddr>(),
-        )
-        .into_future();
-        tokio::pin!(feed, server);
-        tokio::select! {
-            result = &mut worker => { let _ = result; (Err(ErrorCode::AuthorityUnavailable), true) },
-            result = &mut feed => (result, false),
-            result = &mut server => (result.map_err(|_| ErrorCode::Transport), false),
-            result = shutdown() => (result, false),
+    let server = axum::serve(
+        listener,
+        app.into_make_service_with_connect_info::<SocketAddr>(),
+    )
+    .into_future();
+    // The registry names finished communities; each is stopped and its stored
+    // state deleted. A failed sweep is retried on the next tick.
+    let sweeper = {
+        let tenants = tenants.clone();
+        async move {
+            let mut interval = tokio::time::interval(sweep);
+            loop {
+                interval.tick().await;
+                let _ = tenants.sweep().await;
+            }
         }
     };
-    // Dropping the network futures stops ingress. Drain commands already admitted
-    // to the bounded owner queue; timeout/panic fences every storage clone.
-    drop(handle);
-    if !finished {
-        match tokio::time::timeout(
-            Duration::from_millis(configuration.shutdown_ms),
-            &mut worker,
-        )
-        .await
-        {
-            Ok(Ok(())) => {}
-            Ok(Err(_)) => {
-                storage.close();
-                return Err(ErrorCode::AuthorityUnavailable);
+    let outcome = tokio::select! {
+        result = server => result.map_err(|_| ErrorCode::Transport),
+        () = sweeper => Ok(()),
+        result = shutdown_signal() => result,
+    };
+    // Ingress is gone: drain admitted work in every community, then fence.
+    tenants.stop_all().await;
+    outcome
+}
+
+/// Starts a community's owner on shared inputs and deletes its stored state.
+struct Platform(Arc<Shared>);
+impl tenant::Backend for Platform {
+    fn launch(
+        &self,
+        record: &tenant::Record,
+    ) -> tenant::Fut<'_, Result<tenant::Launched, ErrorCode>> {
+        let record = record.clone();
+        Box::pin(async move { self.0.launch(&record).await })
+    }
+    fn purge(&self, id: &str) -> tenant::Fut<'_, Result<(), ErrorCode>> {
+        let id = id.to_owned();
+        Box::pin(async move { self.0.purge(&id).await })
+    }
+}
+
+impl Shared {
+    /// All state of one community lives under its registry identifier: storage
+    /// scope, throttle and trust. Nothing is shared between communities.
+    async fn launch(&self, record: &tenant::Record) -> Result<tenant::Launched, ErrorCode> {
+        let c = &self.configuration;
+        let scope =
+            cmmr::Scope::new(&record.id, &c.incarnation).map_err(|_| ErrorCode::InvalidRequest)?;
+        let storage: cvtl::Volatile<_> = match &self.network {
+            None => cvtl::Volatile::memory(scope, c.storage_limits, self.clock.clone())
+                .map_err(|_| ErrorCode::AuthorityUnavailable)?,
+            Some((network, _)) => {
+                cvtl::Volatile::valkey(network.clone(), scope, c.storage_limits, self.clock.clone())
+                    .await
+                    .map_err(|_| ErrorCode::AuthorityUnavailable)?
             }
-            Err(_) => {
-                storage.close();
-                // Tokio abort cannot preempt synchronous native polling. Revoke
-                // its actual process owner first; it kills/reaps before yielding.
-                cancellation.cancel();
-                worker.abort();
-                let _ = worker.await;
-                return Err(ErrorCode::AuthorityUnavailable);
+        };
+        // Persistent state is refused; an unreadable setting is only reported.
+        runtime::valkey::check_persistence(storage.warnings())?;
+        if !storage.warnings().is_empty() {
+            eprintln!("forum volatile storage persistence could not be verified");
+        }
+        match &storage {
+            cvtl::Volatile::Memory(_) => {
+                let throttle = cthl::MemoryStore::new(c.throttle_capacity);
+                self.start(record, storage, throttle).await
+            }
+            cvtl::Volatile::Valkey(backend) => {
+                let throttle = cvtl::ThrottleStore::new(backend.clone(), c.throttle_capacity)
+                    .map_err(|_| ErrorCode::InvalidRequest)?;
+                self.start(record, storage, throttle).await
             }
         }
     }
-    storage.close();
-    outcome
+
+    async fn start<Q: cthl::Store + 'static>(
+        &self,
+        record: &tenant::Record,
+        storage: cvtl::Volatile<WallClock>,
+        quota: Q,
+    ) -> Result<tenant::Launched, ErrorCode> {
+        let c = &self.configuration;
+        // The registry alone supplies what this community's feed must be signed by.
+        let trust = csrn::cchr::Configuration {
+            origin: record.trust_origin.clone(),
+            community: record.id.clone(),
+            key_ring: record.key_ring.clone(),
+            minimum_revision: record.minimum_revision,
+            ring_revision: record.ring_revision,
+        };
+        let transport = csrn::http::Http::with_roots(&trust, &c.trust_roots_der)
+            .map_err(|_| ErrorCode::InvalidRequest)?;
+        let assurance = csrn::Assurance::new(
+            trust,
+            csrn::feed::Config {
+                retry_entropy: entropy()?,
+                refresh_seconds: c.refresh_seconds,
+                poll_seconds: c.poll_seconds,
+                request_seconds: c.request_seconds,
+                initial_backoff_seconds: c.initial_backoff_seconds,
+                maximum_backoff_seconds: c.maximum_backoff_seconds,
+                maximum_staleness_seconds: c.maximum_staleness_seconds,
+            },
+        )
+        .map_err(|_| ErrorCode::InvalidRequest)?;
+        let mut rates = BTreeMap::new();
+        for action in cfrm::actions() {
+            let value = c
+                .throttle
+                .get(action.name)
+                .ok_or(ErrorCode::InvalidRequest)?;
+            let limit = cthl::Limit::new(value.burst, Duration::from_millis(value.replenish_ms))
+                .map_err(|_| ErrorCode::InvalidRequest)?;
+            rates.insert(action.name, limit);
+        }
+        if rates.len() != c.throttle.len() {
+            return Err(ErrorCode::InvalidRequest);
+        }
+        let throttle =
+            cthl::Throttle::new(&record.id, rates, quota).map_err(|_| ErrorCode::InvalidRequest)?;
+        let native = c.accounting.verifier(&self.artifacts)?;
+        let cancellation = native.cancellation();
+        let record_limits = c.accounting.limits();
+        let record_configuration = cgth::accounting::Configuration {
+            community: record.id.clone(),
+            period_key: c.accounting.period_key.clone(),
+            period_seconds: c.accounting.period_seconds,
+        };
+        let service = runtime::Service::new(
+            assurance,
+            runtime::Parts {
+                storage,
+                clock: self.clock.clone(),
+                tokens: Random,
+                throttle,
+            },
+            runtime::Configuration {
+                community: record.id.clone(),
+                incarnation: c.incarnation.clone(),
+                admission_action: c.admission_action.clone(),
+                origins: record.origins.clone(),
+                maximum_snapshot_age: c.maximum_snapshot_age,
+                request_bytes: c.request_bytes,
+                presence: cswb::Limits {
+                    lease_ms: c.maximum_lease_ms,
+                    publication_bytes: c.publication_bytes,
+                    ciphertext_bytes: c.ciphertext_bytes,
+                },
+                lookup: clkp::LookupLimits {
+                    candidates: c.candidate_count,
+                    publication_bytes: c.page_publication_bytes,
+                },
+                room_epoch: c.room_epoch,
+                rooms: cmbl::Limits {
+                    connections: c.room_connections,
+                    relay_messages: c.room_relay_messages,
+                    message_bytes: c.room_message_bytes,
+                    lifetime_ms: c.room_lifetime_ms,
+                    proof_bytes: c.room_proof_bytes,
+                    operation_receipts: c.room_operation_receipts,
+                },
+            },
+            // No accepting detector is substituted: restricted public text stays
+            // refused until an original contact detector can be supplied.
+            |_: &str| cshm::ContactCheck::Unavailable,
+        )?;
+        let service = service.with_accounting(record_configuration, native, record_limits)?;
+        let (handle, worker) =
+            service.spawn(c.command_capacity, Duration::from_millis(c.maintenance_ms))?;
+        let follower = tokio::spawn({
+            let (handle, clock) = (handle.clone(), self.clock.clone());
+            async move {
+                let _ = follow(handle, transport, clock).await;
+            }
+        });
+        Ok(tenant::Launched {
+            handle,
+            worker,
+            follower,
+            cancel: Box::new(move || cancellation.cancel()),
+        })
+    }
+
+    /// Delete every key the community ever wrote (all incarnations). Memory
+    /// storage lives inside the stopped owner and needs nothing.
+    async fn purge(&self, id: &str) -> Result<(), ErrorCode> {
+        let (Some((_, connection)), Storage::Valkey { timeout_ms, .. }) =
+            (&self.network, &self.configuration.storage)
+        else {
+            return Ok(());
+        };
+        let pattern = purge_pattern(id);
+        let mut connection = connection.clone();
+        let work = async {
+            let mut cursor = 0_u64;
+            loop {
+                let (next, keys): (u64, Vec<Vec<u8>>) = redis::cmd("SCAN")
+                    .arg(cursor)
+                    .arg("MATCH")
+                    .arg(&pattern)
+                    .arg("COUNT")
+                    .arg(500)
+                    .query_async(&mut connection)
+                    .await?;
+                if !keys.is_empty() {
+                    let mut command = redis::cmd("UNLINK");
+                    for key in &keys {
+                        command.arg(key.as_slice());
+                    }
+                    command.query_async::<()>(&mut connection).await?;
+                }
+                if next == 0 {
+                    return Ok::<(), redis::RedisError>(());
+                }
+                cursor = next;
+            }
+        };
+        tokio::time::timeout(Duration::from_millis(*timeout_ms) * 20, work)
+            .await
+            .map_err(|_| ErrorCode::AuthorityUnavailable)?
+            .map_err(|_| ErrorCode::AuthorityUnavailable)
+    }
+}
+
+/// The scope prefix cvlk gives every key of a community: `cvlk:v1:{community:incarnation}`.
+fn purge_pattern(id: &str) -> String {
+    format!("cvlk:v1:{{{id}:*")
 }
 
 async fn follow(
@@ -430,7 +499,7 @@ async fn follow(
     }
 }
 
-async fn shutdown() -> Result<(), ErrorCode> {
+async fn shutdown_signal() -> Result<(), ErrorCode> {
     let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
         .map_err(|_| ErrorCode::AuthorityUnavailable)?;
     tokio::select! {

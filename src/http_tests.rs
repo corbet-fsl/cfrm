@@ -150,7 +150,7 @@ async fn size_version_json_timeout_and_concurrency_are_bounded() {
         .await,
         ErrorCode::Timeout
     );
-    let mut config = Config::new(limits(), None).unwrap();
+    let mut config = Config::new(limits(), None, None).unwrap();
     config.anonymous = Semaphore::new(0);
     assert_eq!(
         result(
@@ -424,7 +424,7 @@ async fn one_source_cannot_exhaust_the_others_and_is_limited_before_any_work() {
 
 #[tokio::test]
 async fn anonymous_and_authenticated_capacity_are_separate_pools() {
-    let mut config = Config::new(limits(), None).unwrap();
+    let mut config = Config::new(limits(), None, None).unwrap();
     config.authenticated = Semaphore::new(0);
     let config = Arc::new(config);
     // Authenticated actions are refused while pre-session actions still run.
@@ -438,7 +438,7 @@ async fn anonymous_and_authenticated_capacity_are_separate_pools() {
         result(handle(State(config.clone()), request("/v1/challenge", body)).await).await,
         ErrorCode::AuthorityUnavailable
     );
-    let mut config = Config::new(limits(), None).unwrap();
+    let mut config = Config::new(limits(), None, None).unwrap();
     config.anonymous = Semaphore::new(0);
     let body = serde_json::to_vec(&search(vec![1; 16])).unwrap();
     assert_eq!(
@@ -492,7 +492,7 @@ async fn idle_source_and_session_keys_are_dropped_on_a_timer_until_the_router_en
         keys: 8,
     };
     value.session = value.source;
-    let config = Arc::new(Config::new(value, None).unwrap());
+    let config = Arc::new(Config::new(value, None, None).unwrap());
     assert!(config.source.admit(&"192.0.2.1".parse().unwrap()));
     assert!(config.session.admit(&vec![1]));
     assert_eq!((config.source.tracked(), config.session.tracked()), (1, 1));
@@ -540,4 +540,75 @@ async fn a_full_source_table_throttles_new_sources_together_instead_of_locking_o
     // further new sources are throttled together.
     assert_eq!(send("192.0.2.2:1").await, ErrorCode::AuthorityUnavailable);
     assert_eq!(send("192.0.2.3:1").await, ErrorCode::Capacity);
+}
+
+#[tokio::test]
+async fn communities_are_resolved_from_the_registry_per_request() {
+    use crate::tenant::tests as fixtures;
+    let (registry, _, tenants) = fixtures::setup(Duration::from_secs(60), 4);
+    fixtures::put(
+        &registry,
+        "one.example.test",
+        fixtures::record(fixtures::A, crate::tenant::State::Live),
+    );
+    let mut dynamic = limits();
+    let (_, _, other) = fixtures::setup(Duration::from_secs(1), 1);
+    assert!(router_tenants(limits(), Arc::new(other)).is_err());
+    dynamic.hosts.clear();
+    dynamic.origins.clear();
+    let app = router_tenants(dynamic, Arc::new(tenants)).unwrap();
+    let call = |host: &str, origin: &str| {
+        Request::builder()
+            .method("POST")
+            .uri("/v1/challenge")
+            .header(header::HOST, host)
+            .header(header::ORIGIN, origin)
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(Body::from(serde_json::to_vec(&call()).unwrap()))
+            .unwrap()
+    };
+    let unknown = app
+        .clone()
+        .oneshot(call("two.example.test", "https://01234567.example.test"))
+        .await
+        .unwrap();
+    assert_eq!(unknown.status(), StatusCode::MISDIRECTED_REQUEST);
+    let wrong = app
+        .clone()
+        .oneshot(call("one.example.test", "https://example.test"))
+        .await
+        .unwrap();
+    assert_eq!(wrong.status(), StatusCode::FORBIDDEN);
+    // The community's owner is reached (the fake owner never answers).
+    let reached = app
+        .clone()
+        .oneshot(call("one.example.test", "https://01234567.example.test"))
+        .await
+        .unwrap();
+    assert_eq!(reached.status(), StatusCode::REQUEST_TIMEOUT);
+    let preflight = Request::builder()
+        .method("OPTIONS")
+        .uri("/v1/challenge")
+        .header(header::HOST, "one.example.test")
+        .header(header::ORIGIN, "https://01234567.example.test")
+        .header(header::ACCESS_CONTROL_REQUEST_METHOD, "POST")
+        .header(header::ACCESS_CONTROL_REQUEST_HEADERS, "content-type")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.clone().oneshot(preflight).await.unwrap().status(),
+        StatusCode::NO_CONTENT
+    );
+    let two_hosts = Request::builder()
+        .method("POST")
+        .uri("/v1/challenge")
+        .header(header::HOST, "one.example.test")
+        .header(header::HOST, "two.example.test")
+        .header(header::ORIGIN, "https://01234567.example.test")
+        .body(Body::empty())
+        .unwrap();
+    assert_eq!(
+        app.oneshot(two_hosts).await.unwrap().status(),
+        StatusCode::MISDIRECTED_REQUEST
+    );
 }

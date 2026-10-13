@@ -53,9 +53,15 @@ struct Config {
     source: Keyed<IpAddr>,
     session: Keyed<Vec<u8>>,
     controller: Option<crate::runtime::Handle>,
+    /// Dynamic mode: every community is resolved from its Host header.
+    tenants: Option<Arc<crate::tenant::Tenants>>,
 }
 impl Config {
-    fn new(limits: Limits, controller: Option<crate::runtime::Handle>) -> Result<Self, ErrorCode> {
+    fn new(
+        limits: Limits,
+        controller: Option<crate::runtime::Handle>,
+        tenants: Option<Arc<crate::tenant::Tenants>>,
+    ) -> Result<Self, ErrorCode> {
         if limits.concurrent == 0
             || limits.concurrent > 4096
             || limits.anonymous_concurrent == 0
@@ -78,6 +84,7 @@ impl Config {
             source,
             session,
             controller,
+            tenants,
             limits,
         })
     }
@@ -136,22 +143,33 @@ fn via_ohttp(_: &Request) -> bool {
 }
 
 pub fn router(limits: Limits) -> Result<Router, ErrorCode> {
-    configured(limits, None)
+    configured(limits, None, None)
 }
 
 pub fn router_with(
     limits: Limits,
     controller: crate::runtime::Handle,
 ) -> Result<Router, ErrorCode> {
-    configured(limits, Some(controller))
+    configured(limits, Some(controller), None)
+}
+
+/// Multi-tenant router: communities come from the registry through `tenants`,
+/// so no host or origin is configured here (both lists must be empty).
+pub fn router_tenants(
+    limits: Limits,
+    tenants: Arc<crate::tenant::Tenants>,
+) -> Result<Router, ErrorCode> {
+    configured(limits, None, Some(tenants))
 }
 
 fn configured(
     limits: Limits,
     controller: Option<crate::runtime::Handle>,
+    tenants: Option<Arc<crate::tenant::Tenants>>,
 ) -> Result<Router, ErrorCode> {
-    if limits.hosts.is_empty()
-        || limits.origins.is_empty()
+    let dynamic = tenants.is_some();
+    if limits.hosts.is_empty() == !dynamic
+        || limits.origins.is_empty() == !dynamic
         || limits.body_bytes == 0
         || limits.body_bytes > 1_048_576
     {
@@ -176,7 +194,7 @@ fn configured(
             return Err(ErrorCode::Origin);
         }
     }
-    let state = Arc::new(Config::new(limits, controller)?);
+    let state = Arc::new(Config::new(limits, controller, tenants)?);
     // Without a runtime (in-process use) idle keys are still dropped whenever a
     // full table is hit.
     if tokio::runtime::Handle::try_current().is_ok() {
@@ -214,8 +232,8 @@ fn reject(error: ErrorCode) -> Response {
         .into_response()
 }
 
-fn exact_header(request: &Request, name: header::HeaderName, allowed: &[String]) -> bool {
-    let mut values = request.headers().get_all(name).iter();
+fn exact_header(headers: &header::HeaderMap, name: header::HeaderName, allowed: &[String]) -> bool {
+    let mut values = headers.get_all(name).iter();
     let valid = values
         .next()
         .and_then(|v| v.to_str().ok())
@@ -223,15 +241,40 @@ fn exact_header(request: &Request, name: header::HeaderName, allowed: &[String])
     valid && values.next().is_none()
 }
 
+/// Host and Origin admission. Fixed mode compares configured lists; dynamic mode
+/// resolves the community from the registry and returns its owner handle.
+async fn admit(
+    config: &Config,
+    headers: &header::HeaderMap,
+) -> Result<Option<crate::runtime::Handle>, ErrorCode> {
+    let Some(tenants) = &config.tenants else {
+        if !exact_header(headers, header::HOST, &config.limits.hosts) {
+            return Err(ErrorCode::Host);
+        }
+        if !exact_header(headers, header::ORIGIN, &config.limits.origins) {
+            return Err(ErrorCode::Origin);
+        }
+        return Ok(config.controller.clone());
+    };
+    let mut hosts = headers.get_all(header::HOST).iter();
+    let host = hosts.next().and_then(|v| v.to_str().ok());
+    let (Some(host), None) = (host, hosts.next()) else {
+        return Err(ErrorCode::Host);
+    };
+    let tenant = tenants.resolve(host).await?;
+    if !exact_header(headers, header::ORIGIN, &tenant.origins) {
+        return Err(ErrorCode::Origin);
+    }
+    Ok(Some(tenant.handle))
+}
+
 async fn handle(State(config): State<Arc<Config>>, request: Request) -> Response {
-    if !exact_header(&request, header::HOST, &config.limits.hosts) {
-        return reject(ErrorCode::Host);
-    }
-    if !exact_header(&request, header::ORIGIN, &config.limits.origins) {
-        return reject(ErrorCode::Origin);
-    }
+    let controller = match admit(&config, request.headers()).await {
+        Ok(controller) => controller,
+        Err(error) => return reject(error),
+    };
     let origin = request.headers()[header::ORIGIN].clone();
-    cors(origin, handle_allowed(config, request).await)
+    cors(origin, handle_allowed(config, request, controller).await)
 }
 
 fn cors(origin: axum::http::HeaderValue, mut response: Response) -> Response {
@@ -245,15 +288,12 @@ fn cors(origin: axum::http::HeaderValue, mut response: Response) -> Response {
 }
 
 async fn preflight(State(config): State<Arc<Config>>, request: Request) -> Response {
-    if !exact_header(&request, header::HOST, &config.limits.hosts) {
-        return reject(ErrorCode::Host);
-    }
-    if !exact_header(&request, header::ORIGIN, &config.limits.origins) {
-        return reject(ErrorCode::Origin);
+    if let Err(error) = admit(&config, request.headers()).await {
+        return reject(error);
     }
     let origin = request.headers()[header::ORIGIN].clone();
     if !exact_header(
-        &request,
+        request.headers(),
         header::ACCESS_CONTROL_REQUEST_METHOD,
         &["POST".into()],
     ) {
@@ -284,8 +324,16 @@ async fn preflight(State(config): State<Arc<Config>>, request: Request) -> Respo
     )
 }
 
-async fn handle_allowed(config: Arc<Config>, request: Request) -> Response {
-    if !exact_header(&request, header::CONTENT_TYPE, &["application/json".into()]) {
+async fn handle_allowed(
+    config: Arc<Config>,
+    request: Request,
+    controller: Option<crate::runtime::Handle>,
+) -> Response {
+    if !exact_header(
+        request.headers(),
+        header::CONTENT_TYPE,
+        &["application/json".into()],
+    ) {
         return reject(ErrorCode::MediaType);
     }
     // Cheapest refusal first: the per-source bucket runs before a permit, the
@@ -332,7 +380,7 @@ async fn handle_allowed(config: Arc<Config>, request: Request) -> Response {
             return reject(ErrorCode::Capacity);
         }
     }
-    let result = match &config.controller {
+    let result = match controller {
         Some(controller) => {
             match tokio::time::timeout(
                 config.limits.request_timeout,

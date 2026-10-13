@@ -14,7 +14,7 @@ client-browser = ["dep:gloo-timers", "dep:web-sys", "dep:wasm-bindgen", "dep:was
 server = ["dep:axum", "dep:governor", "dep:tokio", "dep:cgth", "dep:csrn", "dep:cvtl", "dep:cshm"]
 ohttp = ["serve", "dep:cblv", "cblv/gateway", "dep:zeroize"]
 client-ohttp = ["dep:cblv", "cblv/client"]
-serve = ["server", "csrn/http", "dep:clap", "dep:getrandom", "dep:redis", "tokio/signal", "tokio/rt-multi-thread"]
+serve = ["server", "csrn/http", "dep:clap", "dep:getrandom", "dep:redis", "dep:reqwest", "tokio/signal", "tokio/rt-multi-thread"]
 
 [[bin]]
 name = "cfrm"

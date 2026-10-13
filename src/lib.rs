@@ -15,6 +15,8 @@ mod portable_tests;
 
 #[cfg(all(feature = "server", not(target_arch = "wasm32")))]
 pub mod runtime;
+#[cfg(all(feature = "server", not(target_arch = "wasm32")))]
+pub mod tenant;
 
 #[cfg(all(feature = "client-http", not(target_arch = "wasm32")))]
 mod client_http;

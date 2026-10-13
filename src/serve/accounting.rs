@@ -23,7 +23,8 @@ pub(super) struct Configuration {
 }
 
 impl Configuration {
-    pub fn verifier(&self) -> Result<verification::NativeExtensionVerifier, ErrorCode> {
+    /// Authenticated once at startup; every community's verifier clones it.
+    pub fn artifacts(&self) -> Result<artifacts::ExtensionArtifacts, ErrorCode> {
         if !self.artifact_directory.is_absolute() || !self.executable.is_absolute() {
             return Err(ErrorCode::InvalidRequest);
         }
@@ -32,7 +33,7 @@ impl Configuration {
         let keys = read(&self.artifact_directory, "keys.json", 1024 * 1024)?;
         let g1 = read(&self.artifact_directory, "setup/g1.dat", 128 * 1024 * 1024)?;
         let g2 = read(&self.artifact_directory, "setup/g2.dat", 128)?;
-        let artifacts = artifacts::ExtensionArtifacts::authenticate(artifacts::ArtifactBytes {
+        artifacts::ExtensionArtifacts::authenticate(artifacts::ArtifactBytes {
             manifest: &manifest,
             manifest_sha256: self.manifest_sha256,
             circuit: &circuit,
@@ -40,7 +41,12 @@ impl Configuration {
             srs_g1: &g1,
             srs_g2: &g2,
         })
-        .map_err(|_| ErrorCode::AuthorityUnavailable)?;
+        .map_err(|_| ErrorCode::AuthorityUnavailable)
+    }
+    pub fn verifier(
+        &self,
+        artifacts: &artifacts::ExtensionArtifacts,
+    ) -> Result<verification::NativeExtensionVerifier, ErrorCode> {
         // The Forum actor serializes native proof work. No request can expand
         // this fixed concurrency or alter the verifier's execution limits.
         let options = artifacts::NativeVerifierOptions {
@@ -51,7 +57,7 @@ impl Configuration {
             threads: self.threads,
             memory_megabytes: self.memory_megabytes,
         };
-        verification::NativeExtensionVerifier::new(options.clone(), options, artifacts)
+        verification::NativeExtensionVerifier::new(options.clone(), options, artifacts.clone())
             .map_err(|_| ErrorCode::AuthorityUnavailable)
     }
     pub fn limits(&self) -> verification::ExtensionLimits {
