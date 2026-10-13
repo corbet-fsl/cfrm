@@ -40,15 +40,15 @@ axum = { version = "0.8", optional = true, default-features = false, features = 
 tokio = { version = "1", optional = true, features = ["rt", "time", "sync", "net", "macros"] }
 zeroize = { version = "1", optional = true }
 
-cgth = { git = "https://git.corbet.ch/corbet-libs/cgth.git", branch = "v01", features = ["issuer", "accounting"], optional = true }
-csrn = { git = "https://git.corbet.ch/corbet-libs/csrn.git", branch = "v01", optional = true }
+cgth = { git = "https://git.corbet.ch/corbet-libs/cgth.git", branch = "main", features = ["issuer", "accounting"], optional = true }
+csrn = { git = "https://git.corbet.ch/corbet-libs/csrn.git", branch = "main", optional = true }
 cvtl = { git = "https://git.corbet.ch/corbet-libs/cvtl.git", branch = "v01", optional = true }
 cshm = { git = "https://git.corbet.ch/corbet-foss/cshm", branch = "main", optional = true }
 
 [dev-dependencies]
 cnvl = { git = "https://git.corbet.ch/corbet-foss/cnvl.git", branch = "v01" }
-cchr = { git = "https://git.corbet.ch/corbet-foss/cchr.git", branch = "v01" }
-cpfl = { git = "https://git.corbet.ch/corbet-foss/cpfl.git", branch = "v01" }
+cchr = { git = "https://git.corbet.ch/corbet-foss/cchr.git", branch = "main" }
+cpfl = { git = "https://git.corbet.ch/corbet-foss/cpfl.git", branch = "main" }
 cgrd = { git = "https://git.corbet.ch/corbet-foss/cgrd", branch = "main", default-features = false }
 ckmg = { git = "https://git.corbet.ch/corbet-foss/ckmg.git", branch = "v01" }
 cwst = { git = "https://git.corbet.ch/corbet-foss/cwst.git", branch = "v01" }
