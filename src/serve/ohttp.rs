@@ -1,10 +1,10 @@
 //! Oblivious HTTP gateway wiring: keys from secret files, replay cache in Valkey.
 use super::Storage;
-use cfrm::ErrorCode;
 use cblv::{
     gateway::{Gateway, GatewayKey, system_clock},
     replay::{BoxFuture, Id, Insert, ReplayStore, StoreError},
 };
+use cfrm::ErrorCode;
 use serde::Deserialize;
 use std::{
     path::PathBuf,
@@ -109,7 +109,10 @@ impl ValkeyReplay {
             .query_async(&mut connection)
             .await
             .map_err(unavailable)?;
-        Ok(Self { connection, started: AtomicU64::new(epoch.unwrap_or(now)) })
+        Ok(Self {
+            connection,
+            started: AtomicU64::new(epoch.unwrap_or(now)),
+        })
     }
 }
 
@@ -118,14 +121,26 @@ fn hex(id: &Id) -> String {
 }
 
 impl ReplayStore for ValkeyReplay {
-    fn insert_if_absent(&self, id: Id, expires_at: u64) -> BoxFuture<'_, Result<Insert, StoreError>> {
+    fn insert_if_absent(
+        &self,
+        id: Id,
+        expires_at: u64,
+    ) -> BoxFuture<'_, Result<Insert, StoreError>> {
         Box::pin(async move {
             let now = system_clock();
             let ttl = expires_at.saturating_sub(now).max(1);
             let mut connection = self.connection.clone();
             let (epoch, nonce): (Option<String>, Option<String>) = redis::pipe()
-                .cmd("SET").arg(EPOCH_KEY).arg(now).arg("NX")
-                .cmd("SET").arg(format!("{NONCE_PREFIX}{}", hex(&id))).arg(1).arg("NX").arg("EX").arg(ttl)
+                .cmd("SET")
+                .arg(EPOCH_KEY)
+                .arg(now)
+                .arg("NX")
+                .cmd("SET")
+                .arg(format!("{NONCE_PREFIX}{}", hex(&id)))
+                .arg(1)
+                .arg("NX")
+                .arg("EX")
+                .arg(ttl)
                 .query_async(&mut connection)
                 .await
                 .map_err(|_| StoreError)?;
@@ -135,7 +150,11 @@ impl ReplayStore for ValkeyReplay {
                 self.started.store(now, Ordering::SeqCst);
                 return Err(StoreError);
             }
-            Ok(if nonce.is_some() { Insert::Fresh } else { Insert::Replayed })
+            Ok(if nonce.is_some() {
+                Insert::Fresh
+            } else {
+                Insert::Replayed
+            })
         })
     }
 

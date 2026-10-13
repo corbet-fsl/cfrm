@@ -206,7 +206,9 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
     }
     #[cfg(feature = "ohttp")]
     let gateway = match &configuration.ohttp {
-        Some(settings) => Some(ohttp::build(settings, &configuration.hosts, &configuration.storage).await?),
+        Some(settings) => {
+            Some(ohttp::build(settings, &configuration.hosts, &configuration.storage).await?)
+        }
         None => None,
     };
     match &storage {
