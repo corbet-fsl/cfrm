@@ -42,16 +42,16 @@ zeroize = { version = "1", optional = true }
 
 cgth = { git = "https://git.corbet.ch/corbet-libs/cgth.git", branch = "main", features = ["issuer", "accounting"], optional = true }
 csrn = { git = "https://git.corbet.ch/corbet-libs/csrn.git", branch = "main", optional = true }
-cvtl = { git = "https://git.corbet.ch/corbet-libs/cvtl.git", branch = "v01", optional = true }
+cvtl = { git = "https://git.corbet.ch/corbet-libs/cvtl.git", branch = "main", optional = true }
 cshm = { git = "https://git.corbet.ch/corbet-foss/cshm", branch = "main", optional = true }
 
 [dev-dependencies]
-cnvl = { git = "https://git.corbet.ch/corbet-foss/cnvl.git", branch = "v01" }
+cnvl = { git = "https://git.corbet.ch/corbet-foss/cnvl.git", branch = "main" }
 cchr = { git = "https://git.corbet.ch/corbet-foss/cchr.git", branch = "main" }
 cpfl = { git = "https://git.corbet.ch/corbet-foss/cpfl.git", branch = "main" }
 cgrd = { git = "https://git.corbet.ch/corbet-foss/cgrd", branch = "main", default-features = false }
-ckmg = { git = "https://git.corbet.ch/corbet-foss/ckmg.git", branch = "v01" }
-cwst = { git = "https://git.corbet.ch/corbet-foss/cwst.git", branch = "v01" }
+ckmg = { git = "https://git.corbet.ch/corbet-foss/ckmg.git", branch = "main" }
+cwst = { git = "https://git.corbet.ch/corbet-foss/cwst.git", branch = "main" }
 csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false, features = ["volatile-signer"] }
 ed25519-dalek = { version = "3", default-features = false, features = ["fast"] }
 tower = { version = "0.5", features = ["util"] }
