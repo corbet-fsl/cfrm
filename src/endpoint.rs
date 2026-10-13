@@ -3,6 +3,8 @@ pub(crate) struct Endpoint {
     pub forum: String,
     pub member: String,
     pub maximum: usize,
+    /// Only the direct transports enforce it; the OHTTP wire owns its own timeout.
+    #[cfg_attr(feature = "client-ohttp", allow(dead_code))]
     pub timeout: std::time::Duration,
 }
 impl Endpoint {
