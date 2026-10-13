@@ -26,6 +26,10 @@ pub struct Configuration {
     pub sweep_seconds: u64,
     /// Upper bound on communities running in this process.
     pub maximum_communities: usize,
+    /// Extra DER certificate files trusted for the registry URL, added to the public roots.
+    /// Deployment option for private test stacks; production leaves it empty.
+    #[serde(default)]
+    pub tls_root_files: Vec<std::path::PathBuf>,
 }
 
 pub struct Http {
@@ -46,7 +50,14 @@ impl Http {
         {
             return Err(ErrorCode::InvalidRequest);
         }
-        let client = reqwest::Client::builder()
+        let mut builder = reqwest::Client::builder();
+        for file in &configuration.tls_root_files {
+            let der = std::fs::read(file).map_err(|_| ErrorCode::InvalidRequest)?;
+            builder = builder.add_root_certificate(
+                reqwest::Certificate::from_der(&der).map_err(|_| ErrorCode::InvalidRequest)?,
+            );
+        }
+        let client = builder
             .timeout(Duration::from_millis(configuration.timeout_ms))
             .redirect(Policy::none())
             .build()

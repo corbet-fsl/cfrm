@@ -11,8 +11,25 @@ impl HttpTransport {
         maximum_response: usize,
         timeout: std::time::Duration,
     ) -> Result<Self, ErrorCode> {
+        Self::with_roots(forum_origin, member_origin, maximum_response, timeout, &[])
+    }
+    /// The same with extra trusted root certificates (DER) added to the public root store.
+    /// Deployment configuration only (private test stacks); production passes none.
+    pub fn with_roots(
+        forum_origin: String,
+        member_origin: String,
+        maximum_response: usize,
+        timeout: std::time::Duration,
+        roots: &[Vec<u8>],
+    ) -> Result<Self, ErrorCode> {
         let endpoint = Endpoint::new(forum_origin, member_origin, maximum_response, timeout)?;
-        let client = reqwest::Client::builder()
+        let mut builder = reqwest::Client::builder();
+        for root in roots {
+            builder = builder.add_root_certificate(
+                reqwest::Certificate::from_der(root).map_err(|_| ErrorCode::InvalidRequest)?,
+            );
+        }
+        let client = builder
             .user_agent("cfrm-client")
             .no_proxy()
             .retry(reqwest::retry::never())
