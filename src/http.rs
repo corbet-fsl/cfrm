@@ -122,19 +122,6 @@ fn source(request: &Request) -> IpAddr {
     }
 }
 
-#[cfg(feature = "ohttp")]
-fn via_ohttp(request: &Request) -> bool {
-    request
-        .extensions()
-        .get::<cblv::gateway::ViaOhttp>()
-        .is_some()
-}
-
-#[cfg(not(feature = "ohttp"))]
-fn via_ohttp(_: &Request) -> bool {
-    false
-}
-
 pub fn router(limits: Limits) -> Result<Router, ErrorCode> {
     configured(limits, None)
 }
@@ -290,8 +277,7 @@ async fn handle_allowed(config: Arc<Config>, request: Request) -> Response {
     }
     // Cheapest refusal first: the per-source bucket runs before a permit, the
     // body read or any owner work.
-    // Behind OHTTP the sender's address is never known here; the relay holds the per-IP limits.
-    if !via_ohttp(&request) && !config.source.admit(&source(&request)) {
+    if !config.source.admit(&source(&request)) {
         return reject(ErrorCode::Capacity);
     }
     let path = request.uri().path().to_owned();
