@@ -1,4 +1,4 @@
-use crate::{Call, ErrorCode, Failure, Request};
+use crate::{Call, ErrorCode, Failure, Reply, Request};
 use std::future::Future;
 
 /// The member runtime supplies HTTPS transport. No fallback to an alternate
@@ -19,9 +19,10 @@ impl<T: Transport> Client<T> {
         }
     }
 
-    /// All server actions currently fail closed; no fabricated success body is
-    /// parsed. A future success response must be added in the same registry.
-    pub async fn call(&self, request: Request) -> Result<std::convert::Infallible, ErrorCode> {
+    /// Decode only the registry's exact versioned response for this action.
+    /// Transport success alone never becomes a successful domain response.
+    pub async fn call(&self, request: Request) -> Result<Reply, ErrorCode> {
+        let action = request.info().name;
         let path = format!("/v1/{}", request.info().name);
         let body =
             serde_json::to_vec(&Call::new(request)).map_err(|_| ErrorCode::InvalidRequest)?;
@@ -29,7 +30,13 @@ impl<T: Transport> Client<T> {
         if bytes.len() > self.maximum_response {
             return Err(ErrorCode::TooLarge);
         }
-        let failure: Failure = serde_json::from_slice(&bytes).map_err(|_| ErrorCode::Transport)?;
-        Err(failure.error)
+        if let Ok(failure) = serde_json::from_slice::<Failure>(&bytes) {
+            return Err(failure.error);
+        }
+        let reply: Reply = serde_json::from_slice(&bytes).map_err(|_| ErrorCode::Transport)?;
+        if reply.version != 1 || reply.response.action() != action {
+            return Err(ErrorCode::Transport);
+        }
+        Ok(reply)
     }
 }
