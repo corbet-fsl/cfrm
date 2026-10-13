@@ -87,7 +87,7 @@ struct Configuration {
     throttle_capacity: NonZeroUsize,
     throttle: BTreeMap<String, Rate>,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 enum Storage {
     Memory,
@@ -167,7 +167,8 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
     if bytes.len() > 1_048_576 {
         return Err(ErrorCode::TooLarge);
     }
-    let configuration: Configuration =
+    #[cfg_attr(not(feature = "ohttp"), allow(unused_mut))]
+    let mut configuration: Configuration =
         serde_json::from_slice(&bytes).map_err(|_| ErrorCode::InvalidRequest)?;
     if configuration.maximum_lease_ms > configuration.storage_limits.ttl_ms
         || configuration.shutdown_ms == 0
@@ -198,11 +199,6 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
             Some((network, connection))
         }
     };
-    #[cfg(feature = "ohttp")]
-    let gateway = match &configuration.ohttp {
-        Some(settings) => Some(ohttp::build(settings, &configuration.storage).await?),
-        None => None,
-    };
     let limits = http::Limits {
         hosts: Vec::new(),
         origins: Vec::new(),
@@ -214,6 +210,9 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
         source: configuration.source_bucket.bucket(),
         session: configuration.session_bucket.bucket(),
     };
+    #[cfg(feature = "ohttp")]
+    let (ohttp_settings, storage_settings) =
+        (configuration.ohttp.take(), configuration.storage.clone());
     let bind = configuration.bind;
     let shutdown = Duration::from_millis(configuration.shutdown_ms);
     let sweep = Duration::from_secs(configuration.registry.sweep_seconds);
@@ -232,6 +231,11 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
         shutdown,
         maximum,
     )?);
+    #[cfg(feature = "ohttp")]
+    let gateway = match &ohttp_settings {
+        Some(settings) => Some(ohttp::build(settings, &storage_settings, tenants.clone()).await?),
+        None => None,
+    };
     let app = http::router_tenants(limits, tenants.clone())?;
     #[cfg(feature = "ohttp")]
     let app = match gateway {
@@ -325,18 +329,16 @@ impl Shared {
         quota: Q,
     ) -> Result<tenant::Launched, ErrorCode> {
         let c = &self.configuration;
-        // The registry alone supplies what this community's feed must be signed by.
-        let trust = csrn::cchr::Configuration {
-            origin: record.trust_origin.clone(),
-            community: record.id.clone(),
-            key_ring: record.key_ring.clone(),
-            minimum_revision: record.minimum_revision,
-            ring_revision: record.ring_revision,
-        };
-        let transport = csrn::http::Http::with_roots(&trust, &c.trust_roots_der)
-            .map_err(|_| ErrorCode::InvalidRequest)?;
-        let assurance = csrn::Assurance::new(
-            trust,
+        // Keys are never configured: the feed must chain to the genesis whose hash
+        // is the registry's fingerprint.
+        let transport =
+            csrn::http::Http::for_origin(&record.trust_origin, &record.id, &c.trust_roots_der)
+                .map_err(|_| ErrorCode::InvalidRequest)?;
+        let assurance = csrn::Assurance::from_fingerprint(
+            record.trust_origin.clone(),
+            record.id.clone(),
+            record.fingerprint().ok_or(ErrorCode::InvalidRequest)?,
+            1,
             csrn::feed::Config {
                 retry_entropy: entropy()?,
                 refresh_seconds: c.refresh_seconds,

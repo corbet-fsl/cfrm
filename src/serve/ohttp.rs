@@ -23,9 +23,6 @@ const MAX_RESPONSE: usize = 1 << 20;
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Configuration {
-    /// The exact forum authority the gateway signs for. The gateway rewrites Host
-    /// to it, so only the community that host resolves to is reachable through it.
-    pub authority: String,
     pub keys: Vec<KeyFile>,
     /// File with the secret the Cloudflare proxy adds as `x-relay-auth`; absent only in tests.
     #[serde(default)]
@@ -48,8 +45,12 @@ fn secret(path: &PathBuf) -> Result<Zeroizing<Vec<u8>>, ErrorCode> {
         .map_err(|_| ErrorCode::InvalidRequest)
 }
 
-pub async fn build(settings: &Configuration, storage: &Storage) -> Result<Arc<Gateway>, ErrorCode> {
-    if settings.authority.is_empty() || settings.keys.is_empty() || settings.keys.len() > 4 {
+pub async fn build(
+    settings: &Configuration,
+    storage: &Storage,
+    tenants: Arc<cfrm::tenant::Tenants>,
+) -> Result<Arc<Gateway>, ErrorCode> {
+    if settings.keys.is_empty() || settings.keys.len() > 4 {
         return Err(ErrorCode::InvalidRequest);
     }
     // The replay cache must live in the shared store, never in process memory.
@@ -71,7 +72,7 @@ pub async fn build(settings: &Configuration, storage: &Storage) -> Result<Arc<Ga
         );
     }
     Ok(Arc::new(Gateway {
-        authority: settings.authority.clone(),
+        authorities: Arc::new(Live(tenants)),
         keys,
         replay: Arc::new(replay),
         // Every forum call is cheap to record and most change state.
@@ -83,6 +84,20 @@ pub async fn build(settings: &Configuration, storage: &Storage) -> Result<Arc<Ga
         max_inner_response: MAX_RESPONSE,
         clock: system_clock,
     }))
+}
+
+/// Any inner authority that resolves to a live community is served; everything
+/// else (unknown, not live, ended) is refused alike.
+struct Live(Arc<cfrm::tenant::Tenants>);
+impl cblv::gateway::Authorities for Live {
+    fn accepts<'a>(&'a self, authority: &'a [u8]) -> BoxFuture<'a, bool> {
+        Box::pin(async move {
+            match std::str::from_utf8(authority) {
+                Ok(host) => self.0.resolve(host).await.is_ok(),
+                Err(_) => false,
+            }
+        })
+    }
 }
 
 struct ValkeyReplay {

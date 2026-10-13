@@ -1,8 +1,9 @@
 //! Dynamic communities. A request's Host selects a community through the
 //! registry; the forum keeps one isolated owner per live community and nothing
-//! per-community is configured. The registry is the only source of what the
-//! forum trusts about a community (its key ring and origins): never a feed
-//! response or a member request.
+//! per-community is configured. The registry names the community (id, state,
+//! origins, where its feed lives and the fingerprint of its genesis document);
+//! it is never a source of keys. Keys come only from the community's signed
+//! feed, chained to the genesis whose hash is the fingerprint.
 use crate::{ErrorCode, runtime::Handle};
 use serde::Deserialize;
 use std::{
@@ -36,11 +37,27 @@ pub struct Record {
     pub origins: Vec<String>,
     /// Where the community publishes its signed feed.
     pub trust_origin: String,
-    pub key_ring: Vec<u8>,
-    pub minimum_revision: u64,
-    pub ring_revision: u64,
+    /// Hash of the community's genesis document (64 lowercase hex digits).
+    pub fingerprint: String,
 }
 impl Record {
+    /// The genesis fingerprint as bytes, if well formed.
+    pub fn fingerprint(&self) -> Option<[u8; 32]> {
+        let text = self.fingerprint.as_bytes();
+        if text.len() != 64 {
+            return None;
+        }
+        let digit = |b: u8| match b {
+            b'0'..=b'9' => Some(b - b'0'),
+            b'a'..=b'f' => Some(b - b'a' + 10),
+            _ => None,
+        };
+        let mut out = [0; 32];
+        for (byte, pair) in out.iter_mut().zip(text.chunks(2)) {
+            *byte = digit(pair[0])? << 4 | digit(pair[1])?;
+        }
+        Some(out)
+    }
     pub fn valid(&self) -> bool {
         valid_id(&self.id)
             && !self.origins.is_empty()
@@ -50,7 +67,7 @@ impl Record {
                     u.scheme() == "https" && u.origin().ascii_serialization() == *origin
                 })
             })
-            && !self.key_ring.is_empty()
+            && self.fingerprint().is_some()
     }
 }
 
@@ -378,9 +395,7 @@ pub(crate) mod tests {
             state,
             origins: vec![format!("https://{}.example.test", &id[..8])],
             trust_origin: "https://trust.example.test".into(),
-            key_ring: vec![1],
-            minimum_revision: 1,
-            ring_revision: 1,
+            fingerprint: "ab".repeat(32),
         }
     }
     pub(crate) fn setup(recheck: Duration, maximum: usize) -> (Arc<Registry>, Arc<Fake>, Tenants) {
@@ -416,7 +431,7 @@ pub(crate) mod tests {
         bad.origins = vec!["https://x.example.test/path".into()];
         assert!(!bad.valid());
         let mut bad = record(A, State::Live);
-        bad.key_ring.clear();
+        bad.fingerprint = "zz".repeat(32);
         assert!(!bad.valid());
         assert!(valid_host("a.b-c.example"));
         for host in ["", "A.example", "a:443", &"a".repeat(254)] {
@@ -465,7 +480,7 @@ pub(crate) mod tests {
             assert_eq!(tenants.resolve(host).await.err(), Some(ErrorCode::Host));
         }
         let mut invalid = record(B, State::Live);
-        invalid.key_ring.clear();
+        invalid.fingerprint = "ab".repeat(31);
         put(&registry, "i.example.test", invalid);
         assert_eq!(
             tenants.resolve("i.example.test").await.err(),
@@ -505,7 +520,7 @@ pub(crate) mod tests {
         tenants.resolve("a.example.test").await.unwrap();
         assert_eq!(backend.launched.lock().unwrap().len(), 1);
         let mut rotated = record(A, State::Live);
-        rotated.ring_revision = 2;
+        rotated.trust_origin = "https://other.example.test".into();
         put(&registry, "a.example.test", rotated);
         tenants.resolve("a.example.test").await.unwrap();
         assert_eq!(backend.launched.lock().unwrap().len(), 2);
