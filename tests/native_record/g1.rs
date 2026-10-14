@@ -164,6 +164,7 @@ impl G1 {
                 &custody,
                 &PortableCodec,
                 &clean,
+                &|_: &str| None,
             )
             .unwrap()
             .commit_publication(
