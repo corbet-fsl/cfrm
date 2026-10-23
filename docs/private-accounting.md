@@ -5,7 +5,7 @@
 **2026-09-15 — historical backend review and measurements; not an audit.**
 Inspected cfrm `2c4fa47` and the current cmsg identity, receipt and directional
 Inbox work for the initial review. The later isolated spike was executed on Crow;
-no local builds or proving benchmarks were run on the workstation.
+no local builds or proving benchmarks were run.
 Eligibility remains an external verified input; provider selection is outside scope.
 
 The later experimental [v2 account ledger](account-ledger.md),
