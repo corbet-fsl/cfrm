@@ -47,10 +47,7 @@ pub(super) fn feed(native: &NativeFixture, _lease_ms: u64, revision: u64) -> Val
     let mut book = crbk::Rulebook::default();
     crbk::define_forum_settings(&mut book).unwrap();
     crbk::RecordEpochSettings::define(&mut book, PERIOD_KEY).unwrap();
-    for (key, value) in [
-        ("forum.room_passes_per_epoch", json!(4)),
-        (PERIOD_KEY, json!(native.trusted_period_seconds)),
-    ] {
+    for (key, value) in [(PERIOD_KEY, json!(native.trusted_period_seconds))] {
         book.set_community(key, Some(value)).unwrap();
     }
     crbk::RecordEpochSettings::validate_catalogue(&book, PERIOD_KEY).unwrap();
