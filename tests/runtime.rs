@@ -213,7 +213,7 @@ fn runtime_with_request_clock(
             maximum_snapshot_age: 300,
             request_bytes: 1_048_576,
             presence: cswb::Limits {
-                lease_ms: 10000,
+                lease_ms: 60000,
                 publication_bytes: cpfl::MAX_PROFILE_BYTES,
                 ciphertext_bytes: cpfl::MAX_PROFILE_BYTES,
             },

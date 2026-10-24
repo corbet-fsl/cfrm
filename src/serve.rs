@@ -170,7 +170,9 @@ pub async fn run(arguments: Arguments) -> Result<(), ErrorCode> {
     #[cfg_attr(not(feature = "ohttp"), allow(unused_mut))]
     let mut configuration: Configuration =
         serde_json::from_slice(&bytes).map_err(|_| ErrorCode::InvalidRequest)?;
+    // The ceiling must admit Forum's lease constant (a code constant, not a setting).
     if configuration.maximum_lease_ms > configuration.storage_limits.ttl_ms
+        || configuration.maximum_lease_ms < crbk::FORUM_LEASE_MS
         || configuration.shutdown_ms == 0
         || configuration.registry.sweep_seconds == 0
     {

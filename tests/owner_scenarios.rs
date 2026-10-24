@@ -99,7 +99,7 @@ impl ForumOwners {
             Random,
             "garden".into(),
             cswb::Limits {
-                lease_ms: 10000,
+                lease_ms: 60000,
                 publication_bytes: cpfl::MAX_PROFILE_BYTES,
                 ciphertext_bytes: cpfl::MAX_PROFILE_BYTES,
             },
