@@ -201,7 +201,11 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
                 .settings(now)
                 .map_err(|_| ErrorCode::AuthorityUnavailable)?,
         )
-        .map_err(|_| ErrorCode::AuthorityUnavailable)?;
+        .map_err(|error| {
+            // The Forum cannot run without the community's quota: say which setting.
+            eprintln!("forum settings refused: {error}");
+            ErrorCode::AuthorityUnavailable
+        })?;
         if settings.lease_ms > self.configuration.presence.lease_ms {
             return Err(ErrorCode::AuthorityUnavailable);
         }
