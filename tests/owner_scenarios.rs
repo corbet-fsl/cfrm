@@ -76,7 +76,7 @@ impl ForumOwners {
                 request_seconds: 30,
                 initial_backoff_seconds: 1,
                 maximum_backoff_seconds: 10,
-                maximum_staleness_seconds: 60,
+                maximum_staleness_seconds: 120,
             },
         )
         .unwrap();
@@ -450,7 +450,7 @@ async fn the_exclusive_presence_deadline_requires_a_new_attendance() {
     assert!(owners.storage.get("swb_alice").await.unwrap().is_none());
     let (current, live) = owners.enter(&alice).await;
     assert!(old != current);
-    assert_eq!(live.deadline, clock.now().unwrap() + 10000);
+    assert_eq!(live.deadline, clock.now().unwrap() + crbk::FORUM_LEASE_MS);
     owners.page(&current, &alice, 1).await.unwrap();
     owners.storage.close();
     assert_eq!(owners.storage.state(), cmmr::State::Closed);
@@ -503,11 +503,10 @@ async fn real_owner_admission_match_rooms_and_heartbeat() {
 
     // Original signed quota and current sealed owner capability, no room identity
     // in issuance. No complete Forum/G2 admission is claimed by this partial test.
-    let quota = crbk::ForumSettings::from_snapshot(charter.settings(now).unwrap())
-        .unwrap()
-        .room_passes_per_epoch
-        .try_into()
-        .unwrap();
+    crbk::ForumSettings::from_snapshot(charter.settings(now).unwrap()).unwrap();
+    // A small budget of this test's own, so the Capacity refusal is reachable without issuing
+    // the production quota (a code constant) many times over.
+    let quota: u16 = 4;
     let issuer = cmbl::passes::issuer::BudgetedIssuer::create(
         owners.storage.clone(),
         "garden".into(),

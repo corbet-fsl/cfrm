@@ -383,7 +383,10 @@ async fn challenge_completion_obeys_its_exclusive_owner_deadline() {
         panic!("challenge output")
     };
     let challenge: cswb::Challenge = serde_json::from_slice(&output.challenge).unwrap();
-    assert_eq!(challenge.expires_at_ms, clock.now().unwrap() + 10000);
+    assert_eq!(
+        challenge.expires_at_ms,
+        clock.now().unwrap() + crbk::FORUM_LEASE_MS
+    );
     assert!(reads >= 2);
     // The original trust feed stays valid beyond all three completion times.
     assert!(challenge.expires_at_ms + 1 < settings.valid_until * 1000);
