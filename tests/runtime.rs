@@ -210,7 +210,6 @@ fn runtime_with_request_clock(
             incarnation: "boot".into(),
             admission_action: ACTION.into(),
             origins: vec![ORIGIN.into()],
-            maximum_snapshot_age: 300,
             request_bytes: 1_048_576,
             presence: cswb::Limits {
                 lease_ms: 60000,

@@ -55,7 +55,6 @@ fn verification(charter: &cchr::VerifiedCharter) -> cswb::Verification<'_> {
     cswb::Verification {
         charter,
         action: ACTION,
-        maximum_snapshot_age: 300,
     }
 }
 impl ForumOwners {

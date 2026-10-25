@@ -51,7 +51,6 @@ struct Configuration {
     initial_backoff_seconds: u64,
     maximum_backoff_seconds: u64,
     maximum_staleness_seconds: u64,
-    maximum_snapshot_age: u64,
     storage: Storage,
     /// Oblivious HTTP gateway; absent means direct HTTPS only.
     #[cfg(feature = "ohttp")]
@@ -388,7 +387,6 @@ impl Shared {
                 incarnation: c.incarnation.clone(),
                 admission_action: c.admission_action.clone(),
                 origins: record.origins.clone(),
-                maximum_snapshot_age: c.maximum_snapshot_age,
                 request_bytes: c.request_bytes,
                 presence: cswb::Limits {
                     lease_ms: c.maximum_lease_ms,

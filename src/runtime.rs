@@ -27,7 +27,6 @@ pub struct Configuration {
     pub incarnation: String,
     pub admission_action: String,
     pub origins: Vec<String>,
-    pub maximum_snapshot_age: u64,
     pub request_bytes: usize,
     pub presence: cswb::Limits,
     pub lookup: clkp::LookupLimits,
@@ -75,7 +74,6 @@ where
             }
         }
         if configuration.admission_action.is_empty()
-            || configuration.maximum_snapshot_age == 0
             || configuration.request_bytes == 0
             || configuration.request_bytes > 1_048_576
             || configuration.room_epoch.epoch == 0
@@ -194,7 +192,6 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
         let verification = cswb::Verification {
             charter,
             action: &self.configuration.admission_action,
-            maximum_snapshot_age: self.configuration.maximum_snapshot_age,
         };
         let settings = crbk::ForumSettings::from_snapshot(
             charter

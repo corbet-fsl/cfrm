@@ -105,7 +105,6 @@ impl Host {
                 incarnation: "native-http".into(),
                 admission_action: g1::ACTION.into(),
                 origins: vec![g1::ORIGIN.into()],
-                maximum_snapshot_age: 300,
                 request_bytes: 1_048_576,
                 presence: cswb::Limits {
                     lease_ms: 300_000,
