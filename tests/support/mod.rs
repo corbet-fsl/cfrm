@@ -123,7 +123,7 @@ impl Fixture {
             .await
             .unwrap();
         let current = charter.current(now).unwrap();
-        let policy = current.admission_policy(ACTION, now, 300).unwrap();
+        let policy = current.current_admission_policy(ACTION, now).unwrap();
         let signed_schema = current.publication(cchr::Kind::Schema).signed_bytes();
         // Original maintained conversion for deterministic test device custody.
         // Production uses the fresh-authorized Keys lender, never caller keys.
