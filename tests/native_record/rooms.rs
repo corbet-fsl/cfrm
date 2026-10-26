@@ -30,6 +30,12 @@ fn signed(g1: &G1, mut request: Request) -> Request {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn actual_http_blind_issuance_connect_order_and_expiry_preserve_anonymous_boundary() {
+    if std::env::var_os("CBLC_RECORD_EPOCH_FIXTURE").is_none() {
+        eprintln!(
+            "skipped: CBLC_RECORD_EPOCH_FIXTURE is required (genuine retained CBLC four-artifact fixture)"
+        );
+        return;
+    }
     let native = Fixture::load();
     let g1 = G1::new(&native, &member(), 1, 10_000).await;
     let delay = Delay::new();

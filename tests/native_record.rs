@@ -91,6 +91,12 @@ fn search(g1: &G1, session: &[u8], nonce: u8) -> Request {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn real_http_native_entry_keeps_timer_and_feed_transport_live_then_installs_queued_feed() {
+    if std::env::var_os("CBLC_RECORD_EPOCH_FIXTURE").is_none() {
+        eprintln!(
+            "skipped: CBLC_RECORD_EPOCH_FIXTURE is required (genuine retained CBLC four-artifact fixture)"
+        );
+        return;
+    }
     let native = Fixture::load();
     let g1 = G1::new(&native, &member(), 1, 10_000).await;
     let delay = Delay::new();
@@ -178,6 +184,12 @@ async fn real_http_native_entry_keeps_timer_and_feed_transport_live_then_install
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn forced_actor_shutdown_cancels_and_reaps_actual_native_owner_and_fences_http() {
+    if std::env::var_os("CBLC_RECORD_EPOCH_FIXTURE").is_none() {
+        eprintln!(
+            "skipped: CBLC_RECORD_EPOCH_FIXTURE is required (genuine retained CBLC four-artifact fixture)"
+        );
+        return;
+    }
     let native = Fixture::load();
     let g1 = G1::new(&native, &member(), 1, 10_000).await;
     let delay = Delay::new();
