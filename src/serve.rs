@@ -332,25 +332,21 @@ impl Shared {
         let c = &self.configuration;
         // Keys are never configured: the feed must chain to the genesis whose hash
         // is the registry's fingerprint.
-        let transport =
-            csrn::http::Http::for_origin(&record.trust_origin, &record.id, &c.trust_roots_der)
-                .map_err(|_| ErrorCode::InvalidRequest)?;
-        let assurance = csrn::Assurance::from_fingerprint(
-            record.trust_origin.clone(),
-            record.id.clone(),
-            record.fingerprint().ok_or(ErrorCode::InvalidRequest)?,
-            1,
-            csrn::feed::Config {
-                retry_entropy: entropy()?,
-                refresh_seconds: c.refresh_seconds,
-                poll_seconds: c.poll_seconds,
-                request_seconds: c.request_seconds,
-                initial_backoff_seconds: c.initial_backoff_seconds,
-                maximum_backoff_seconds: c.maximum_backoff_seconds,
-                maximum_staleness_seconds: c.maximum_staleness_seconds,
-            },
+        let transport = csrn::http::Http::for_origin(
+            &record.trust_origin,
+            &record.community,
+            &c.trust_roots_der,
         )
         .map_err(|_| ErrorCode::InvalidRequest)?;
+        let assurance = record.assurance(csrn::feed::Config {
+            retry_entropy: entropy()?,
+            refresh_seconds: c.refresh_seconds,
+            poll_seconds: c.poll_seconds,
+            request_seconds: c.request_seconds,
+            initial_backoff_seconds: c.initial_backoff_seconds,
+            maximum_backoff_seconds: c.maximum_backoff_seconds,
+            maximum_staleness_seconds: c.maximum_staleness_seconds,
+        })?;
         let mut rates = BTreeMap::new();
         for action in cfrm::actions() {
             let value = c
@@ -370,7 +366,7 @@ impl Shared {
         let cancellation = native.cancellation();
         let record_limits = c.accounting.limits();
         let record_configuration = cgth::accounting::Configuration {
-            community: record.id.clone(),
+            community: record.community.clone(),
             period_key: c.accounting.period_key.clone(),
             period_seconds: c.accounting.period_seconds,
         };
@@ -383,7 +379,7 @@ impl Shared {
                 throttle,
             },
             runtime::Configuration {
-                community: record.id.clone(),
+                community: record.community.clone(),
                 incarnation: c.incarnation.clone(),
                 admission_action: c.admission_action.clone(),
                 origins: record.origins.clone(),

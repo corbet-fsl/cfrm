@@ -27,11 +27,15 @@ pub enum State {
 }
 
 /// What the registry says about one community. `id` is the registry's fresh,
-/// never reused identifier (32 lowercase hex digits); it names all forum state.
+/// never reused identifier (32 lowercase hex digits); it names the forum's
+/// storage, throttle and state. `community` is the name the community is signed
+/// under (its address, the genesis scope): trust, credentials and challenges use
+/// it, and the feed installs only if the genesis carries exactly this name.
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Record {
     pub id: String,
+    pub community: String,
     pub state: State,
     /// Exact browser origins allowed to call this community's forum.
     pub origins: Vec<String>,
@@ -58,8 +62,22 @@ impl Record {
         }
         Some(out)
     }
+    /// Trust for this community: the feed must chain to the genesis whose hash is
+    /// the registry's fingerprint, and that genesis must be signed under
+    /// `community`. No key is configured.
+    pub fn assurance(&self, config: csrn::feed::Config) -> Result<csrn::Assurance, ErrorCode> {
+        csrn::Assurance::from_fingerprint(
+            self.trust_origin.clone(),
+            self.community.clone(),
+            self.fingerprint().ok_or(ErrorCode::InvalidRequest)?,
+            1,
+            config,
+        )
+        .map_err(|_| ErrorCode::InvalidRequest)
+    }
     pub fn valid(&self) -> bool {
         valid_id(&self.id)
+            && valid_community(&self.community)
             && !self.origins.is_empty()
             && self.origins.len() <= 4
             && self.origins.iter().all(|origin| {
@@ -76,6 +94,14 @@ pub fn valid_id(id: &str) -> bool {
         && id
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+/// A community name is a single lowercase DNS label (its address).
+fn valid_community(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 63
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 fn valid_host(host: &str) -> bool {
     !host.is_empty()
@@ -392,6 +418,7 @@ pub(crate) mod tests {
     pub(crate) fn record(id: &str, state: State) -> Record {
         Record {
             id: id.into(),
+            community: "garden".into(),
             state,
             origins: vec![format!("https://{}.example.test", &id[..8])],
             trust_origin: "https://trust.example.test".into(),
@@ -447,6 +474,39 @@ pub(crate) mod tests {
             )
             .is_err()
         );
+    }
+
+    #[test]
+    fn the_registry_names_the_signing_community_apart_from_the_storage_id() {
+        let wire = |extra: serde_json::Value| {
+            let mut value = serde_json::json!({
+                "id": A,
+                "community": "toyalpha01",
+                "state": "live",
+                "origins": ["https://toyalpha01.example.test"],
+                "trust_origin": "https://api.toyalpha01.example.test",
+                "fingerprint": "ab".repeat(32),
+            });
+            if let (Some(map), Some(extra)) = (value.as_object_mut(), extra.as_object()) {
+                map.extend(extra.clone());
+            }
+            value
+        };
+        let record: Record = serde_json::from_value(wire(serde_json::json!({}))).unwrap();
+        assert_eq!(record.id, A);
+        assert_eq!(record.community, "toyalpha01");
+        assert!(record.valid());
+        // The community is required, and no other field is tolerated.
+        let mut missing = wire(serde_json::json!({}));
+        missing.as_object_mut().unwrap().remove("community");
+        assert!(serde_json::from_value::<Record>(missing).is_err());
+        assert!(serde_json::from_value::<Record>(wire(serde_json::json!({"extra": 1}))).is_err());
+        // The name must be a plain community label.
+        for bad in ["", "Alpha", "a.b", "a b", "a\0b", &"a".repeat(64)] {
+            let mut record = record.clone();
+            record.community = bad.into();
+            assert!(!record.valid(), "{bad:?}");
+        }
     }
 
     #[tokio::test]
