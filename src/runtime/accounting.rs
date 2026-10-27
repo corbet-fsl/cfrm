@@ -108,7 +108,12 @@ where
                 }
                 Request::Heartbeat(input) => {
                     let value = gather
-                        .heartbeat(read, revision(&input.expected_revision)?, verification)
+                        .heartbeat_with(
+                            read,
+                            revision(&input.expected_revision)?,
+                            verification,
+                            input.accepting_waves,
+                        )
                         .await
                         .map_err(error)?;
                     *deadline = (*deadline).min(value.deadline);
@@ -125,6 +130,7 @@ where
                                 expected: revision(&input.expected_revision)?,
                                 publication: &publication,
                                 record: &record,
+                                accepting_waves: input.accepting_waves,
                             },
                             verification,
                             contact,

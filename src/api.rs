@@ -14,8 +14,11 @@ dto!(ChallengeInput { publication: Vec<u8> });
 dto!(SettingsInput {});
 dto!(Possession { session: Vec<u8>, request_nonce: Vec<u8>, signature: Vec<u8> });
 dto!(EnterInput { challenge: Vec<u8>, signature: Vec<u8>, publication: Vec<u8>, record_proof: Vec<u8> });
-dto!(ReplaceInput { possession: Possession, expected_revision: Vec<u8>, publication: Vec<u8>, record_proof: Vec<u8> });
-dto!(HeartbeatInput { possession: Possession, expected_revision: Vec<u8> });
+// `accepting_waves`: the device's own reading of the member's Wave budget, a
+// findability hint only (the relation's reservation cap still enforces the
+// budget). Missing or null means unknown, which keeps the member visible.
+dto!(ReplaceInput { possession: Possession, expected_revision: Vec<u8>, publication: Vec<u8>, record_proof: Vec<u8>, accepting_waves: Option<bool> });
+dto!(HeartbeatInput { possession: Possession, expected_revision: Vec<u8>, accepting_waves: Option<bool> });
 dto!(DepartInput {
     possession: Possession
 });
@@ -106,6 +109,9 @@ dto!(SearchOutput { requester_revision: Vec<u8>, entries: Vec<PublicationOutput>
 dto!(WatchOutput { requester_revision: Vec<u8>, upserts: Vec<PublicationOutput>, removed: Vec<Vec<u8>>, cursor: Option<Vec<u8>>, watch: Vec<u8> });
 dto!(CiphertextOutput { ciphertext: Vec<u8> });
 dto!(RoomOutput { result: Vec<u8> });
+/// The signed request body version. 2 added `accepting_waves` to heartbeat and
+/// replace; every other version is refused. Replies stay at version 1.
+pub const CALL_VERSION: u16 = 2;
 dto!(Reply {
     version: u16,
     response: Output
@@ -171,7 +177,7 @@ dto!(Failure { error: ErrorCode });
 impl Call {
     pub fn new(request: Request) -> Self {
         Self {
-            version: 1,
+            version: CALL_VERSION,
             request,
         }
     }
@@ -181,7 +187,7 @@ impl Call {
             return Err(ErrorCode::TooLarge);
         }
         let call: Self = serde_json::from_slice(bytes).map_err(|_| ErrorCode::InvalidRequest)?;
-        if call.version != 1 {
+        if call.version != CALL_VERSION {
             return Err(ErrorCode::UnsupportedVersion);
         }
         Ok(call)
@@ -237,7 +243,7 @@ pub fn execute_tool(name: &str, arguments: &[u8], maximum: usize) -> Result<Repl
 
 fn request_schema(name: &str) -> Value {
     json!({"type":"object","allOf":[schema::<Call>(),{"properties":{
-        "version":{"const":1},"request":{"properties":{"action":{"const":name}}}
+        "version":{"const":CALL_VERSION},"request":{"properties":{"action":{"const":name}}}
     }}]})
 }
 

@@ -176,7 +176,12 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
                     }
                     Request::Heartbeat(input) => Output::Heartbeat(live(
                         self.gather
-                            .heartbeat(&session, &current, revision(&input.expected_revision)?)
+                            .heartbeat_with(
+                                &session,
+                                &current,
+                                revision(&input.expected_revision)?,
+                                input.accepting_waves,
+                            )
                             .await
                             .map_err(error)?,
                     )),
@@ -199,11 +204,12 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
                             .map_err(error)?;
                         Output::Replace(live(
                             self.gather
-                                .replace(
+                                .replace_with(
                                     &session,
                                     &current,
                                     revision(&input.expected_revision)?,
                                     admission,
+                                    input.accepting_waves,
                                 )
                                 .await
                                 .map_err(error)?,

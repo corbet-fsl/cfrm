@@ -153,7 +153,7 @@ impl<S: Store + Clone, C: Clock, R: cswb::Tokens, Q: cthl::Store, F: Fn(&str) ->
         {
             return Err(ErrorCode::Origin);
         }
-        if call.version != 1 {
+        if call.version != crate::CALL_VERSION {
             return Err(ErrorCode::UnsupportedVersion);
         }
         if self.storage.state() != cmmr::State::Ready {

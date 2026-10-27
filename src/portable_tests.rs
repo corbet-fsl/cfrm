@@ -30,10 +30,12 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
             expected_revision: vec![1],
             publication: vec![2],
             record_proof: vec![3],
+            accepting_waves: None,
         }),
         Request::Heartbeat(HeartbeatInput {
             possession: possession.clone(),
             expected_revision: vec![1],
+            accepting_waves: None,
         }),
         Request::Depart(DepartInput {
             possession: possession.clone(),
@@ -121,11 +123,11 @@ fn wire_registry_and_refusal_are_identical_in_the_browser() {
 #[cfg_attr(not(target_arch = "wasm32"), test)]
 fn wire_decoder_refuses_duplicate_unknown_and_unbounded_input() {
     for bytes in [
-        br#"{"version":1,"version":1,"request":{"action":"challenge","input":{"publication":[]}}}"#
+        br#"{"version":2,"version":2,"request":{"action":"challenge","input":{"publication":[]}}}"#
             .as_slice(),
-        br#"{"version":1,"request":{"action":"challenge","input":{"publication":[],"extra":true}}}"#,
-        br#"{"version":1,"request":{"action":"unknown","input":{}}}"#,
-        br#"{"version":1,"request":{"action":"challenge","input":{"publication":[256]}}}"#,
+        br#"{"version":2,"request":{"action":"challenge","input":{"publication":[],"extra":true}}}"#,
+        br#"{"version":2,"request":{"action":"unknown","input":{}}}"#,
+        br#"{"version":2,"request":{"action":"challenge","input":{"publication":[256]}}}"#,
     ] {
         assert_eq!(
             execute_tool("challenge", bytes, 4096),
@@ -137,12 +139,21 @@ fn wire_decoder_refuses_duplicate_unknown_and_unbounded_input() {
         ));
     }
     assert!(matches!(Call::decode(&[0; 8], 7), Err(ErrorCode::TooLarge)));
-    let mut call = Call::new(Request::Challenge(ChallengeInput {
-        publication: vec![],
-    }));
-    call.version = 2;
+    // Version 1 bodies (before `accepting_waves`) and unknown versions are refused.
+    assert_eq!(CALL_VERSION, 2);
+    for version in [1, 3] {
+        let mut call = Call::new(Request::Challenge(ChallengeInput {
+            publication: vec![],
+        }));
+        call.version = version;
+        assert!(matches!(
+            Call::decode(&serde_json::to_vec(&call).unwrap(), 4096),
+            Err(ErrorCode::UnsupportedVersion)
+        ));
+    }
+    let old = br#"{"version":1,"request":{"action":"heartbeat","input":{"possession":{"session":[1],"request_nonce":[2],"signature":[3]},"expected_revision":[]}}}"#;
     assert!(matches!(
-        Call::decode(&serde_json::to_vec(&call).unwrap(), 4096),
+        Call::decode(old, 4096),
         Err(ErrorCode::UnsupportedVersion)
     ));
 }
@@ -150,7 +161,7 @@ fn wire_decoder_refuses_duplicate_unknown_and_unbounded_input() {
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
 fn room_api_refuses_authenticated_presence_bindings() {
-    let bytes=br#"{"version":1,"request":{"action":"room_order","input":{"possession":{"session":[1],"request_nonce":[2],"signature":[3]},"room_pass":[4],"command":[5]}}}"#;
+    let bytes=br#"{"version":2,"request":{"action":"room_order","input":{"possession":{"session":[1],"request_nonce":[2],"signature":[3]},"room_pass":[4],"command":[5]}}}"#;
     assert!(matches!(
         Call::decode(bytes, 4096),
         Err(ErrorCode::InvalidRequest)

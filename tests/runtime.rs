@@ -451,10 +451,12 @@ async fn missing_accounting_currentness_refuses_every_member_action_without_atte
             expected_revision: vec![],
             publication: alice.publication.signed.clone(),
             record_proof: vec![],
+            accepting_waves: None,
         }),
         Request::Heartbeat(HeartbeatInput {
             possession: proof.clone(),
             expected_revision: vec![],
+            accepting_waves: None,
         }),
         Request::Depart(DepartInput {
             possession: proof.clone(),
