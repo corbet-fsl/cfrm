@@ -133,7 +133,7 @@ async fn exact_origin_host_media_and_duplicate_header_checks_precede_body_work()
 async fn size_version_json_timeout_and_concurrency_are_bounded() {
     let app = router(limits()).unwrap();
     for (body,error) in [(vec![0;4097],ErrorCode::TooLarge),(b"bad".to_vec(),ErrorCode::InvalidRequest),
-        (br#"{"version":2,"request":{"action":"challenge","input":{"publication":[]}}}"#.to_vec(),ErrorCode::UnsupportedVersion),
+        (br#"{"version":1,"request":{"action":"challenge","input":{"publication":[]}}}"#.to_vec(),ErrorCode::UnsupportedVersion),
         (br#"{"version":2,"request":{"action":"challenge","input":{"publication":[],"extra":true}}}"#.to_vec(),ErrorCode::InvalidRequest),
         (br#"{"version":2,"version":2,"request":{"action":"challenge","input":{"publication":[]}}}"#.to_vec(),ErrorCode::InvalidRequest)] {
         assert_eq!(result(app.clone().oneshot(request("/v1/challenge",body)).await.unwrap()).await,error);
