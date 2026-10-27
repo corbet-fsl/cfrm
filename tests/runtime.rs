@@ -519,7 +519,16 @@ async fn missing_accounting_currentness_refuses_every_member_action_without_atte
             handle.execute(ORIGIN.into(), Call::new(request)).await,
             Err(ErrorCode::AuthorityUnavailable)
         );
-        assert!(storage.get("swb_alice").await.unwrap().is_none());
+        assert!(
+            storage
+                .get(&cswb::attendance_key(
+                    "alice",
+                    &alice.device.verifying_key().to_bytes()
+                ))
+                .await
+                .unwrap()
+                .is_none()
+        );
         assert!(storage.get("room-pass-issuer").await.unwrap().is_none());
     }
     let Request::Enter(mut supplied_proof) = entry.clone() else {
@@ -538,7 +547,16 @@ async fn missing_accounting_currentness_refuses_every_member_action_without_atte
         assert!(futures_util::poll!(&mut future).is_pending());
     }
     handle.next_feed().await.unwrap();
-    assert!(storage.get("swb_alice").await.unwrap().is_none());
+    assert!(
+        storage
+            .get(&cswb::attendance_key(
+                "alice",
+                &alice.device.verifying_key().to_bytes()
+            ))
+            .await
+            .unwrap()
+            .is_none()
+    );
     assert!(storage.get("room-pass-issuer").await.unwrap().is_none());
     drop(app);
     drop(handle);
@@ -588,7 +606,16 @@ async fn credential_challenges_require_ready_trust_exact_origin_and_a_current_me
         call(&app, request).await,
         Err(ErrorCode::AuthorityUnavailable)
     );
-    assert!(storage.get("swb_alice").await.unwrap().is_none());
+    assert!(
+        storage
+            .get(&cswb::attendance_key(
+                "alice",
+                &alice.device.verifying_key().to_bytes()
+            ))
+            .await
+            .unwrap()
+            .is_none()
+    );
     drop(app);
     drop(handle);
     worker.await.unwrap();

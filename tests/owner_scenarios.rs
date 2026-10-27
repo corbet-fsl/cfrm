@@ -339,8 +339,28 @@ async fn signed_member_revocation_removes_a_candidate_and_refuses_its_session() 
     );
     owners.install_revision(now, serde_json::json!({"members":["alice"],"devices":[]}));
     assert!(owners.page(&b, &bob, 3).await.unwrap().entries.is_empty());
-    assert!(owners.storage.get("swb_alice").await.unwrap().is_none());
-    assert!(owners.storage.get("swb_bob").await.unwrap().is_some());
+    assert!(
+        owners
+            .storage
+            .get(&cswb::attendance_key(
+                "alice",
+                &alice.device.verifying_key().to_bytes()
+            ))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        owners
+            .storage
+            .get(&cswb::attendance_key(
+                "bob",
+                &bob.device.verifying_key().to_bytes()
+            ))
+            .await
+            .unwrap()
+            .is_some()
+    );
     assert!(matches!(
         owners.page(&a, &alice, 1).await,
         Err(cgth::Error::Presence(cswb::Error::Absent))
@@ -380,8 +400,28 @@ async fn signed_device_revocation_refuses_the_next_request_and_preserves_other_d
         owners.page(&a, &alice, 1).await,
         Err(cgth::Error::Presence(cswb::Error::TrustUnavailable))
     ));
-    assert!(owners.storage.get("swb_alice").await.unwrap().is_none());
-    assert!(owners.storage.get("swb_bob").await.unwrap().is_some());
+    assert!(
+        owners
+            .storage
+            .get(&cswb::attendance_key(
+                "alice",
+                &alice.device.verifying_key().to_bytes()
+            ))
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert!(
+        owners
+            .storage
+            .get(&cswb::attendance_key(
+                "bob",
+                &bob.device.verifying_key().to_bytes()
+            ))
+            .await
+            .unwrap()
+            .is_some()
+    );
     assert!(owners.page(&b, &bob, 1).await.unwrap().entries.is_empty());
     owners.storage.close();
     assert_eq!(owners.storage.state(), cmmr::State::Closed);
@@ -397,13 +437,29 @@ async fn a_new_attendance_fences_old_departures_and_heartbeats() {
     let (old, old_live) = owners.enter(&alice).await;
     let (current, _) = owners.enter(&alice).await;
     assert!(old != current);
-    let replacement = owners.storage.get("swb_alice").await.unwrap().unwrap();
+    let replacement = owners
+        .storage
+        .get(&cswb::attendance_key(
+            "alice",
+            &alice.device.verifying_key().to_bytes(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
     for (nonce, action) in [(1, "depart"), (2, "heartbeat")] {
         assert!(matches!(
             owners.authorize(&old, &alice, nonce, action).await,
             Err(cgth::Error::Presence(cswb::Error::Stale))
         ));
-        let retained = owners.storage.get("swb_alice").await.unwrap().unwrap();
+        let retained = owners
+            .storage
+            .get(&cswb::attendance_key(
+                "alice",
+                &alice.device.verifying_key().to_bytes(),
+            ))
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(retained.generation, replacement.generation);
         assert_eq!(retained.revision, replacement.revision);
     }
@@ -412,7 +468,10 @@ async fn a_new_attendance_fences_old_departures_and_heartbeats() {
     assert_eq!(
         owners
             .storage
-            .get("swb_alice")
+            .get(&cswb::attendance_key(
+                "alice",
+                &alice.device.verifying_key().to_bytes()
+            ))
             .await
             .unwrap()
             .unwrap()
@@ -426,7 +485,17 @@ async fn a_new_attendance_fences_old_departures_and_heartbeats() {
         .await
         .unwrap();
     owners.gather.depart(&current).await.unwrap();
-    assert!(owners.storage.get("swb_alice").await.unwrap().is_none());
+    assert!(
+        owners
+            .storage
+            .get(&cswb::attendance_key(
+                "alice",
+                &alice.device.verifying_key().to_bytes()
+            ))
+            .await
+            .unwrap()
+            .is_none()
+    );
     owners.storage.close();
     assert_eq!(owners.storage.state(), cmmr::State::Closed);
 }
@@ -446,7 +515,17 @@ async fn the_exclusive_presence_deadline_requires_a_new_attendance() {
         owners.authorize(&old, &alice, 2, "heartbeat").await,
         Err(cgth::Error::Presence(cswb::Error::Absent))
     ));
-    assert!(owners.storage.get("swb_alice").await.unwrap().is_none());
+    assert!(
+        owners
+            .storage
+            .get(&cswb::attendance_key(
+                "alice",
+                &alice.device.verifying_key().to_bytes()
+            ))
+            .await
+            .unwrap()
+            .is_none()
+    );
     let (current, live) = owners.enter(&alice).await;
     assert!(old != current);
     assert_eq!(live.deadline, clock.now().unwrap() + crbk::FORUM_LEASE_MS);
@@ -629,9 +708,104 @@ async fn real_owner_admission_match_rooms_and_heartbeat() {
         .heartbeat(&a, &current, a_live.revision)
         .await
         .unwrap();
-    let committed = owners.storage.get("swb_alice").await.unwrap().unwrap();
+    let committed = owners
+        .storage
+        .get(&cswb::attendance_key(
+            "alice",
+            &alice.device.verifying_key().to_bytes(),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(committed.revision, live.revision);
     assert_ne!(committed.revision, a_live.revision);
+    owners.storage.close();
+    assert_eq!(owners.storage.state(), cmmr::State::Closed);
+}
+
+#[tokio::test]
+async fn two_devices_of_one_member_hold_sessions_at_the_same_time() {
+    let clock = Time::new();
+    let now = clock.now().unwrap() / 1000;
+    let mut owners = ForumOwners::new(&clock);
+    owners.bootstrap();
+    let alice_one = Fixture::new("alice", 1, now).await;
+    let alice_two = Fixture::with_device("alice", 1, now, 14).await;
+    let bob_one = Fixture::new("bob", 1, now).await;
+    let (a1, a1_live) = owners.enter(&alice_one).await;
+    let (a2, a2_live) = owners.enter(&alice_two).await;
+    // Both device sessions stay live: neither heartbeat is stale.
+    let mut a2_revision = a2_live.revision;
+    for (session, live, fixture, nonce) in [
+        (&a1, &a1_live, &alice_one, 1),
+        (&a2, &a2_live, &alice_two, 2),
+    ] {
+        let current = owners
+            .authorize(session, fixture, nonce, "heartbeat")
+            .await
+            .unwrap();
+        let renewed = owners
+            .gather
+            .heartbeat(session, &current, live.revision)
+            .await
+            .unwrap();
+        if session == &a2 {
+            a2_revision = renewed.revision;
+        }
+    }
+    // One member counts once: a search from bob sees alice exactly once.
+    let (b1, _) = owners.enter(&bob_one).await;
+    let members: Vec<String> = owners
+        .page(&b1, &bob_one, 3)
+        .await
+        .unwrap()
+        .entries
+        .into_iter()
+        .map(|entry| entry.member)
+        .collect();
+    assert_eq!(members, vec!["alice"]);
+    // Disconnecting one device keeps the member present on the other.
+    owners.gather.depart(&a1).await.unwrap();
+    let current = owners
+        .authorize(&a2, &alice_two, 4, "heartbeat")
+        .await
+        .unwrap();
+    owners
+        .gather
+        .heartbeat(&a2, &current, a2_revision)
+        .await
+        .unwrap();
+    let members: Vec<String> = owners
+        .page(&b1, &bob_one, 5)
+        .await
+        .unwrap()
+        .entries
+        .into_iter()
+        .map(|entry| entry.member)
+        .collect();
+    assert_eq!(members, vec!["alice"]);
+    // Two members with two devices each count two members, never four
+    // devices: each side sees exactly the other member once.
+    let bob_two = Fixture::with_device("bob", 1, now, 15).await;
+    let (_b2, _) = owners.enter(&bob_two).await;
+    let members: Vec<String> = owners
+        .page(&a2, &alice_two, 6)
+        .await
+        .unwrap()
+        .entries
+        .into_iter()
+        .map(|entry| entry.member)
+        .collect();
+    assert_eq!(members, vec!["bob"]);
+    let members: Vec<String> = owners
+        .page(&_b2, &bob_two, 7)
+        .await
+        .unwrap()
+        .entries
+        .into_iter()
+        .map(|entry| entry.member)
+        .collect();
+    assert_eq!(members, vec!["alice"]);
     owners.storage.close();
     assert_eq!(owners.storage.state(), cmmr::State::Closed);
 }

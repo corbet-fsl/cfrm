@@ -109,7 +109,10 @@ async fn real_http_native_entry_keeps_timer_and_feed_transport_live_then_install
     };
     assert!(
         host.storage
-            .get(&format!("swb_{}", member()))
+            .get(&cswb::attendance_key(
+                &member(),
+                &g1.device.verifying_key().to_bytes()
+            ))
             .await
             .unwrap()
             .is_some()
