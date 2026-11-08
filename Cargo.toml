@@ -3,7 +3,7 @@ name = "cfrm"
 version = "0.2.0"
 edition = "2024"
 description = "Authenticated volatile forum API"
-repository = "https://git.corbet.ch/corbet-libs/cfrm.git"
+repository = "https://git.corbet.ch/corbet-fsl/cfrm.git"
 license-file = "LICENSE.md"
 publish = false
 
@@ -22,13 +22,13 @@ path = "src/main.rs"
 required-features = ["serve"]
 
 [dependencies]
-cblv = { git = "https://git.corbet.ch/corbet-foss/cblv.git", branch = "main", optional = true }
+cblv = { git = "https://git.corbet.ch/corbet-libre/cblv.git", branch = "main", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = "1"
 ts-rs = "12"
 url = "2"
-crbk = { git = "https://git.corbet.ch/corbet-foss/crbk", branch = "main", default-features = false }
+crbk = { git = "https://git.corbet.ch/corbet-libre/crbk.git", branch = "main", default-features = false }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 clap = { version = "4", features = ["derive"], optional = true }
@@ -40,19 +40,19 @@ axum = { version = "0.8", optional = true, default-features = false, features = 
 tokio = { version = "1", optional = true, features = ["rt", "time", "sync", "net", "macros"] }
 zeroize = { version = "1", optional = true }
 
-cgth = { git = "https://git.corbet.ch/corbet-libs/cgth.git", branch = "main", features = ["issuer", "accounting"], optional = true }
-csrn = { git = "https://git.corbet.ch/corbet-libs/csrn.git", branch = "main", optional = true }
-cvtl = { git = "https://git.corbet.ch/corbet-libs/cvtl.git", branch = "main", optional = true }
-cshm = { git = "https://git.corbet.ch/corbet-foss/cshm", branch = "main", optional = true }
+cgth = { git = "https://git.corbet.ch/corbet-fsl/cgth.git", branch = "main", features = ["issuer", "accounting"], optional = true }
+csrn = { git = "https://git.corbet.ch/corbet-fsl/csrn.git", branch = "main", optional = true }
+cvtl = { git = "https://git.corbet.ch/corbet-fsl/cvtl.git", branch = "main", optional = true }
+cshm = { git = "https://git.corbet.ch/corbet-libre/cshm.git", branch = "main", optional = true }
 
 [dev-dependencies]
-cnvl = { git = "https://git.corbet.ch/corbet-foss/cnvl.git", branch = "main" }
-cchr = { git = "https://git.corbet.ch/corbet-foss/cchr.git", branch = "main" }
-cpfl = { git = "https://git.corbet.ch/corbet-foss/cpfl.git", branch = "main" }
-cgrd = { git = "https://git.corbet.ch/corbet-foss/cgrd", branch = "main", default-features = false }
-ckmg = { git = "https://git.corbet.ch/corbet-foss/ckmg.git", branch = "main" }
+cnvl = { git = "https://git.corbet.ch/corbet-libre/cnvl.git", branch = "main" }
+cchr = { git = "https://git.corbet.ch/corbet-libre/cchr.git", branch = "main" }
+cpfl = { git = "https://git.corbet.ch/corbet-libre/cpfl.git", branch = "main" }
+cgrd = { git = "https://git.corbet.ch/corbet-libre/cgrd.git", branch = "main", default-features = false }
+ckmg = { git = "https://git.corbet.ch/corbet-libre/ckmg.git", branch = "main" }
 cwst = { git = "https://git.corbet.ch/corbet-foss/cwst.git", branch = "main" }
-csgn = { git = "https://git.corbet.ch/corbet-foss/csgn", branch = "main", default-features = false, features = ["volatile-signer"] }
+csgn = { git = "https://git.corbet.ch/corbet-libre/csgn.git", branch = "main", default-features = false, features = ["volatile-signer"] }
 ed25519-dalek = { version = "3", default-features = false, features = ["fast"] }
 tower = { version = "0.5", features = ["util"] }
 http-body-util = "0.1"
@@ -63,7 +63,7 @@ wasm-bindgen-test = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 rmcp = { version = "3", default-features = false, features = ["server"] }
-cblc = { git = "https://git.corbet.ch/corbet-libs/cblc", branch = "main", features = ["publication"] }
+cblc = { git = "https://git.corbet.ch/corbet-fsl/cblc.git", branch = "main", features = ["publication"] }
 data-encoding = "2"
 tempfile = "3"
 tokio = { version = "1", features = ["rt-multi-thread"] }
