@@ -175,12 +175,7 @@ jobs:
           coverage.txt'
         retention-days: 7
 'on':
-  push:
-    branches:
-    - main
-    - candidate/**
-  pull_request: null
-  workflow_dispatch: null
+  workflow_dispatch:
 env:
   CARGO_BUILD_JOBS: 2
   CARGO_TERM_COLOR: always
