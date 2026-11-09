@@ -1,5 +1,5 @@
 #![cfg(all(feature = "server", not(target_arch = "wasm32")))]
-mod support;
+use crate::support::*;
 use cfrm::*;
 use cgth::{cmmr, cswb, cthl};
 use cmmr::{Clock, Store};
@@ -12,7 +12,6 @@ use std::{
     },
     time::Duration,
 };
-use support::*;
 use tower::ServiceExt;
 
 #[derive(Clone)]

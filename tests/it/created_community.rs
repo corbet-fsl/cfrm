@@ -2,11 +2,10 @@
 //! its address (the genesis scope), while the registry's `id` only names storage,
 //! throttle and state. The trust feed installs only when the genesis names exactly
 //! the community the registry record carries.
-mod support;
 
+use crate::support::{feed, issuer};
 use cfrm::tenant::{Record, State};
 use serde_json::json;
-use support::{feed, issuer};
 
 const NOW: u64 = 1_800_000_000;
 const ID: &str = "0123456789abcdef0123456789abcdef";

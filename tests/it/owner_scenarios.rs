@@ -1,8 +1,8 @@
 //! Real partial owner round trips, below the Forum admission boundary.
 //! These exercise person/profile/device authority, not mandatory G2 currentness.
 #![cfg(all(feature = "server", not(target_arch = "wasm32")))]
-mod support;
 
+use crate::support::*;
 use cgth::{Gather, clkp, cmbl, cmmr, cswb, cthl};
 use cmmr::{Clock, Store};
 use ed25519_dalek::Signer as _;
@@ -14,7 +14,6 @@ use std::{
     },
     time::Duration,
 };
-use support::*;
 
 #[derive(Clone)]
 struct Time(Arc<AtomicU64>);
