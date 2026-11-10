@@ -51,7 +51,7 @@ cchr = { git = "https://git.corbet.ch/corbet-libre/cchr.git", branch = "main" }
 cpfl = { git = "https://git.corbet.ch/corbet-libre/cpfl.git", branch = "main" }
 cgrd = { git = "https://git.corbet.ch/corbet-libre/cgrd.git", branch = "main", default-features = false }
 ckmg = { git = "https://git.corbet.ch/corbet-libre/ckmg.git", branch = "main" }
-cwst = { git = "https://git.corbet.ch/corbet-foss/cwst.git", branch = "main" }
+cwst = { git = "https://git.corbet.ch/corbet-libre/cwst.git", branch = "main" }
 csgn = { git = "https://git.corbet.ch/corbet-libre/csgn.git", branch = "main", default-features = false, features = ["volatile-signer"] }
 ed25519-dalek = { version = "3", default-features = false, features = ["fast"] }
 tower = { version = "0.5", features = ["util"] }
