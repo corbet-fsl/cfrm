@@ -3,7 +3,8 @@ name = "cfrm"
 version = "0.2.0"
 edition = "2024"
 description = "Authenticated volatile forum API"
-repository = "https://git.corbet.ch/corbet-fsl/cfrm.git"
+repository = "https://git.corbet.ch/corbet-fsl/cfrm"
+homepage = "https://git.corbet.ch/corbet-fsl/cfrm"
 license-file = "LICENSE.md"
 publish = false
 
